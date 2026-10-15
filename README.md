@@ -59,7 +59,7 @@ Publication runs from the [Publish workflow](.github/workflows/publish.yml) on G
 The npm package must trust this repository's `publish.yml` workflow with the `npm` environment:
 
 ```sh
-npm trust github @yudshj/sherpa-onnx-win-arm64 --file publish.yml --repository yudshj/sherpa-onnx-node --environment npm
+npm trust github @yudshj/sherpa-onnx-win-arm64 --file publish.yml --repository yudshj/sherpa-onnx-node --environment npm --allow-publish
 ```
 
 `node release.mjs publish` also works locally for the `yudshj` npm account.
