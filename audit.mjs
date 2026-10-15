@@ -51,14 +51,6 @@ export function scanBytes(bytes, sensitive) {
   }
 }
 
-export function verifyPe(bytes) {
-  const offset = bytes.length >= 64 ? bytes.readUInt32LE(60) : -1;
-  if (offset < 64 || offset > bytes.length - 6 || bytes.toString('ascii', 0, 2) !== 'MZ'
-      || bytes.readUInt32LE(offset) !== 0x4550 || bytes.readUInt16LE(offset + 4) !== 0xaa64) {
-    throw new Error('Expected an ARM64 PE binary');
-  }
-}
-
 export async function auditContents(path, sensitive = privateValues()) {
   scanBytes(readFileSync(path), sensitive);
   const seen = new Set();
@@ -77,7 +69,6 @@ export async function auditContents(path, sensitive = privateValues()) {
       try {
         const bytes = Buffer.concat(chunks);
         scanBytes(bytes, sensitive);
-        if (binaries.includes(base)) verifyPe(bytes);
         if (base === 'package.json') {
           const manifest = JSON.parse(bytes.toString('utf8'));
           if (JSON.stringify(manifest) !== JSON.stringify(packageManifest())) throw new Error('Unexpected package manifest');
@@ -99,7 +90,7 @@ export function packageManifest() {
     files: files.filter(file => file !== 'package.json'), publishConfig: { access: 'public', registry: 'https://registry.npmjs.org/' } };
 }
 
-/** Full publication gate: metadata/privacy checks followed by real import inspection. */
+/** Full publication gate: metadata/privacy checks followed by dumpbin machine and import inspection. */
 export async function auditTarball(path, sensitive = privateValues()) {
   const report = await auditContents(path, sensitive);
   const work = mkdtempSync(join(tmpdir(), 'sherpa-import-audit-'));

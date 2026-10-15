@@ -34,7 +34,7 @@ The build selects the newest Visual Studio installation that has both components
 1. Downloads the inputs pinned in [`lock.json`](lock.json) and verifies their SHA-256: the upstream source tag, the upstream static-runtime ARM64 libraries, node-addon-api, Node headers and `node.lib`, the node-gyp delay-load hook, the upstream `sherpa-onnx-node` JavaScript wrapper and the ONNX Runtime notices.
 2. Compiles the Node-API adapter from the upstream addon sources with [`CMakeLists.txt`](CMakeLists.txt): `/MT`, `NAPI_VERSION=8`, `/DELAYLOAD:node.exe`, no debug information and no absolute PDB path. Source `#line` directives keep build paths out of diagnostics.
 3. Stages exactly the 28 allowlisted files, runs a native resampling smoke test and packs the tarball into `dist/`.
-4. Audits the packed tarball: allowlist, no links or owner metadata, exact `package.json`, ARM64 PE headers, `dumpbin /DEPENDENTS` without dynamic MSVC runtime imports, and a scan for local user names, host names, paths, configured secrets and known credential formats. It then extracts the tarball and runs the smoke test again.
+4. Audits the packed tarball: allowlist, no links or owner metadata, exact `package.json`, the ARM64 machine type from `dumpbin /HEADERS`, `dumpbin /DEPENDENTS` without dynamic MSVC runtime imports, and a scan for local user names, host names, paths, configured secrets and known credential formats. It then extracts the tarball and runs the smoke test again.
 
 `npm run negative-control` downloads the deprecated `1.13.8` tarball, verifies its registry integrity, and requires the import audit to reject all four of its binaries.
 

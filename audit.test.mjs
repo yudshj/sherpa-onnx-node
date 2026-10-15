@@ -5,8 +5,8 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as tar from 'tar';
-import { auditContents, scanBytes, verifyPe, files, binaries, packageManifest } from './audit.mjs';
-import { parseDependents } from './import-audit.mjs';
+import { auditContents, scanBytes, files, packageManifest } from './audit.mjs';
+import { parseDependents, parseMachine } from './import-audit.mjs';
 import { generatorFor } from './toolchain.mjs';
 
 test('rejects dynamic MSVC runtime imports, including delay imports and mixed case', () => {
@@ -38,12 +38,12 @@ test('rejects user paths, npm tokens and private-key headers', () => {
   }
 });
 
-test('rejects x64 and truncated binaries', () => {
-  const bytes = Buffer.alloc(128);
-  bytes.write('MZ'); bytes.writeUInt32LE(64, 60); bytes.writeUInt32LE(0x4550, 64);
-  bytes.writeUInt16LE(0xaa64, 68); verifyPe(bytes);
-  bytes.writeUInt16LE(0x8664, 68); assert.throws(() => verifyPe(bytes));
-  assert.throws(() => verifyPe(Buffer.alloc(3)));
+test('accepts only the ARM64 machine type reported by dumpbin', () => {
+  const headers = machine => `File Type: DLL\n\nFILE HEADER VALUES\n            ${machine}\n               7 number of sections`;
+  assert.equal(parseMachine(headers('AA64 machine (ARM64)')), 'ARM64');
+  assert.throws(() => parseMachine(headers('8664 machine (x64)')), /Expected an ARM64 binary/);
+  assert.throws(() => parseMachine(headers('8664 machine (x64) (ARM64X)')), /Expected an ARM64 binary/);
+  assert.throws(() => parseMachine('dumpbin : fatal error LNK1106: invalid file'), /did not report a machine type/);
 });
 
 test('rejects extra archive files before extraction', async () => {
@@ -61,10 +61,7 @@ test('accepts portable metadata and rejects hard links and personal owners', asy
   const root = mkdtempSync(join(tmpdir(), 'sherpa-audit-test-'));
   try {
     mkdirSync(join(root, 'package'));
-    const pe = Buffer.alloc(128);
-    pe.write('MZ'); pe.writeUInt32LE(64, 60); pe.writeUInt32LE(0x4550, 64); pe.writeUInt16LE(0xaa64, 68);
-    for (const file of files) writeFileSync(join(root, 'package', file), file === 'package.json'
-      ? JSON.stringify(packageManifest()) : binaries.includes(file) ? pe : 'public');
+    for (const file of files) writeFileSync(join(root, 'package', file), file === 'package.json' ? JSON.stringify(packageManifest()) : 'public');
     const archive = join(root, 'valid.tgz');
     const entries = files.map(file => `package/${file}`);
     await tar.c({ cwd: root, file: archive, gzip: true, portable: true }, entries);
