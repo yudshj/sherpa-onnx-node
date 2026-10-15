@@ -23,7 +23,7 @@ fs.mkdirSync(packageDir, { recursive: true });
 await tar.x({ file: archive, cwd: packageDir, strip: 1, strict: true });
 
 const node24 = path.join(repo, 'apps/desktop/.desktop-build/targets/win-arm64/runtime/primary-runtime/dependencies/node/bin/node.exe');
-const electron = path.join(repo, 'apps/desktop/node_modules/electron/dist/electron.exe');
+const electron = process.env.ELECTRON || path.join(repo, 'apps/desktop/node_modules/electron/dist/electron.exe');
 const cleanEnvironment = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
   !/(?:token|secret|password|passwd|api.?key|private.?key|credential)/iu.test(key) && key !== 'ELECTRON_RUN_AS_NODE'));
 const smoke = `const assert=require('node:assert/strict'); const s=require(${JSON.stringify(packageDir)});

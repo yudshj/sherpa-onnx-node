@@ -66,7 +66,7 @@ npm trust github @yudshj/sherpa-onnx-win-arm64 --file publish.yml --repository y
 
 ## Qualification with DeepSeek Harness
 
-`node qualify.mjs <deepseek-harness-checkout> <model-assets>` loads the audited tarball in native Node 22 and 24 and in Electron 44.7.0 (Node mode and main process), then transcribes a pinned sample with the harness SenseVoice worker. It requires a prepared Windows ARM64 Desktop build in the checkout and the locked model files. These checks do not replace validation on a clean machine without Visual Studio.
+`node qualify.mjs <deepseek-harness-checkout> <model-assets>` loads the audited tarball in native Node 22 and 24 and in Electron 44.7.0 (Node mode and main process), then transcribes a pinned sample with the harness SenseVoice worker. It requires a prepared Windows ARM64 Desktop build in the checkout and the locked model files; `ELECTRON` overrides the checkout's Electron 44.7.0 executable. These checks do not replace validation on a clean machine without Visual Studio.
 
 ## License
 
