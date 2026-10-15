@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdir
 import { dirname, join, relative } from 'node:path';
 import * as tar from 'tar';
 import { auditTarball, binaries, files, name, packageManifest, privateValues, repository, scanBytes, version, upstreamVersion, wrappers } from './audit.mjs';
-import { systemTar, visualStudio } from './toolchain.mjs';
+import { systemTar, toolchain } from './toolchain.mjs';
 
 const root = import.meta.dirname;
 const lock = JSON.parse(readFileSync(join(root, 'lock.json'), 'utf8'));
@@ -16,10 +16,11 @@ const npmCli = process.env.npm_execpath ?? join(dirname(process.execPath), 'node
 const npm = (args, cwd = root) => execFileSync(process.execPath, [npmCli, ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 function run(command, args, options = {}) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  const { env: base = process.env, ...rest } = options;
+  const env = Object.fromEntries(Object.entries(base).filter(([key]) =>
     !/(?:token|secret|password|passwd|api.?key|private.?key|credential)/i.test(key)
     && !/^(?:CL|_CL_|LINK|_LINK_|CFLAGS|CXXFLAGS)$/i.test(key)));
-  execFileSync(command, args, { stdio: 'inherit', env, ...options });
+  execFileSync(command, args, { stdio: 'inherit', ...rest, env });
 }
 
 async function assetFile(key) {
@@ -69,9 +70,9 @@ async function check() {
 
 async function build() {
   if (process.platform !== 'win32' || process.arch !== 'arm64') throw new Error('Build on native Windows ARM64 Node.');
-  const vs = visualStudio();
+  const vs = toolchain();
   const tarExe = systemTar();
-  console.log(`Visual Studio ${vs.version} at ${vs.path}; ${vs.generator}; bundled CMake ${vs.cmake}`);
+  console.log(`Visual Studio ${vs.version} at ${vs.path}; MSVC ${vs.environment.VCToolsVersion}; Windows SDK ${vs.environment.WindowsSDKVersion.replace(/\\$/u, '')}`);
   mkdirSync(output, { recursive: true });
   const work = mkdtempSync(join(output, 'build-'));
   const sensitive = privateValues([work, root]);
@@ -91,15 +92,24 @@ async function build() {
       throw new Error('Upstream JavaScript API version mismatch');
     }
     for (const key of ['source', 'api', 'headers', 'gyp']) mapSourceNames(join(work, key), key);
-    const buildDir = join(work, 'compiled');
-    run(vs.cmake, ['-S', root, '-B', buildDir, '-G', vs.generator, '-A', 'ARM64', `-DCMAKE_GENERATOR_INSTANCE=${vs.path}`,
-      ...Object.entries({ SOURCE_ROOT: 'source', API_ROOT: 'api', HEADERS_ROOT: 'headers', GYP_ROOT: 'gyp',
-        NODE_LIB: 'node.lib', LIBRARY_ROOT: 'libraries' }).map(([key, path]) => `-D${key}=${join(work, path)}`)]);
-    run(vs.cmake, ['--build', buildDir, '--config', 'Release', '--parallel', '4']);
+    // Upstream ships the ARM64 runtime DLLs but no Node binding; compile only the binding against them.
+    const compiled = join(work, 'compiled');
+    mkdirSync(compiled);
+    const bindingRoot = join(work, 'source', 'harmony-os', 'SherpaOnnxHar', 'sherpa_onnx', 'src', 'main', 'cpp');
+    const sources = readdirSync(bindingRoot).filter(file => file.endsWith('.cc') && file !== 'utils.cc').sort()
+      .map(file => join(bindingRoot, file));
+    // /EHsc enables node-addon-api C++ exceptions; the delay-loaded host lets Electron's executable provide Node-API.
+    run(join(vs.bin, 'cl.exe'), ['/nologo', '/MP', '/O2', '/EHsc', '/MT',
+      '/std:c++17', '/utf-8', '/DNDEBUG', '/DNAPI_VERSION=8', '/DHOST_BINARY="node.exe"',
+      `/I${join(work, 'source')}`, `/I${join(work, 'api')}`, `/I${join(work, 'headers', 'include', 'node')}`,
+      ...sources, join(work, 'gyp', 'src', 'win_delay_load_hook.cc'), '/LD', '/Fesherpa-onnx.node',
+      '/link', '/DEBUG:NONE', '/PDBALTPATH:sherpa-onnx.pdb', '/INCREMENTAL:NO', '/DELAYLOAD:node.exe',
+      join(work, 'node.lib'), join(work, 'libraries', 'lib', 'sherpa-onnx-c-api.lib'), 'delayimp.lib'],
+    { cwd: compiled, env: vs.environment });
     const stage = join(work, 'package');
     mkdirSync(stage);
     for (const file of wrappers) copyFileSync(join(work, 'wrapper', file), join(stage, file));
-    for (const file of binaries) copyFileSync(file.endsWith('.node') ? join(buildDir, 'Release', file)
+    for (const file of binaries) copyFileSync(file.endsWith('.node') ? join(compiled, file)
       : join(work, 'libraries', 'lib', file), join(stage, file));
     for (const [source, dest] of [['source/LICENSE', 'LICENSE'], ['gyp/LICENSE', 'LICENSE-node-gyp'],
       ['api/LICENSE.md', 'LICENSE-node-addon-api'], ['licenseOnnx', 'LICENSE-onnxruntime'],

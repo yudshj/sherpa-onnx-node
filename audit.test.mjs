@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import * as tar from 'tar';
 import { auditContents, scanBytes, files, packageManifest } from './audit.mjs';
 import { parseDependents, parseMachine } from './import-audit.mjs';
-import { generatorFor } from './toolchain.mjs';
+import { parseEnvironment } from './toolchain.mjs';
 
 test('rejects dynamic MSVC runtime imports, including delay imports and mixed case', () => {
   for (const file of ['MSVCP140.dll', 'MSVCP140_1.dll', 'VCRUNTIME140.dll', 'concrt140.dll', 'VCCORLIB140.DLL']) {
@@ -83,10 +83,9 @@ test('accepts portable metadata and rejects hard links and personal owners', asy
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('maps Visual Studio 2022 and 2026 to their CMake generators', () => {
-  assert.equal(generatorFor('17.14.37710.0'), 'Visual Studio 17 2022');
-  assert.equal(generatorFor('18.10.12224.181'), 'Visual Studio 18 2026');
-  assert.throws(() => generatorFor('16.11.35731.53'), /Unsupported Visual Studio/);
+test('reads the vcvarsall environment, including values that contain equals signs', () => {
+  assert.deepEqual(parseEnvironment('=C:=C:\\work\r\nINCLUDE=C:\\a;C:\\b\r\nVSCMD_ARG_TGT_ARCH=arm64\r\nFLAGS=a=b\r\n'),
+    { INCLUDE: 'C:\\a;C:\\b', VSCMD_ARG_TGT_ARCH: 'arm64', FLAGS: 'a=b' });
 });
 
 test('declares the source repository required by provenance verification', () => {

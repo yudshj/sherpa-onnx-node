@@ -1,55 +1,58 @@
-/** Locate one Visual Studio installation and the Windows tools every build step must share. */
+/** Locate one Visual Studio ARM64 toolchain that every build and audit step shares. */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const requiredComponents = ['Microsoft.VisualStudio.Component.VC.Tools.ARM64', 'Microsoft.VisualStudio.Component.VC.CMake.Project'];
-const generators = { 17: 'Visual Studio 17 2022', 18: 'Visual Studio 18 2026' };
+const arm64Tools = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64';
 
 /**
- * Map a Visual Studio installation version to its CMake generator.
- * @param {string} installationVersion vswhere installationVersion, such as 17.14.37710.0.
- * @returns {string} Visual Studio generator name.
+ * Parse the output of cmd's `set` into an environment object.
+ * @param {string} output Lines of NAME=value.
+ * @returns {Record<string, string>} Environment variables.
  */
-export function generatorFor(installationVersion) {
-  const generator = generators[Number.parseInt(installationVersion, 10)];
-  if (!generator) throw new Error(`Unsupported Visual Studio version ${installationVersion}; use Visual Studio 2022 or 2026`);
-  return generator;
+export function parseEnvironment(output) {
+  const environment = {};
+  for (const line of output.split(/\r?\n/u)) {
+    // Drive-current-directory entries such as =C:=C:\work are not inheritable variables.
+    const separator = line.startsWith('=') ? -1 : line.indexOf('=');
+    if (separator > 0) environment[line.slice(0, separator)] = line.slice(separator + 1);
+  }
+  return environment;
 }
 
+function developerEnvironment(installation) {
+  const vcvarsall = join(installation, 'VC', 'Auxiliary', 'Build', 'vcvarsall.bat');
+  if (!existsSync(vcvarsall)) return undefined;
+  // vcvarsall's exit status is unreliable; the resulting variables decide whether it configured ARM64.
+  const output = execFileSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `""${vcvarsall}" arm64 >nul 2>&1 & set"`],
+    { encoding: 'utf8', windowsHide: true, windowsVerbatimArguments: true });
+  const environment = parseEnvironment(output);
+  if (!environment.VCToolsInstallDir || !environment.WindowsSdkDir) return undefined;
+  const bin = join(environment.VCToolsInstallDir, 'bin', 'Hostarm64', 'arm64');
+  if (!['cl.exe', 'link.exe', 'dumpbin.exe'].every(tool => existsSync(join(bin, tool)))) return undefined;
+  return { environment, bin };
+}
+
+let selected;
+
 /**
- * Select the newest Visual Studio with ARM64 C++ tools and its bundled CMake.
- * VS_INSTALLATION pins a specific installation; it must still contain both components.
- * @returns {{ path: string, version: string, generator: string, cmake: string }} Selected installation.
+ * Select the newest Visual Studio installation whose `vcvarsall.bat arm64` configures native ARM64 MSVC and a
+ * Windows SDK. VS_INSTALLATION pins one installation path.
+ * @returns {{ path: string, version: string, environment: Record<string, string>, bin: string }} Selected toolchain.
  */
-export function visualStudio() {
+export function toolchain() {
+  if (selected) return selected;
   const vswhere = join(process.env['ProgramFiles(x86)'], 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
-  const installations = JSON.parse(execFileSync(vswhere, ['-products', '*', '-requires', ...requiredComponents, '-format', 'json'],
-    { encoding: 'utf8', windowsHide: true }));
-  const pinned = process.env.VS_INSTALLATION;
-  const selected = pinned
-    ? installations.find(entry => entry.installationPath.toLowerCase() === pinned.toLowerCase())
-    : installations.sort((a, b) => b.installationVersion.localeCompare(a.installationVersion, 'en', { numeric: true }))[0];
-  if (!selected) {
-    throw new Error(`No Visual Studio installation${pinned ? ` at ${pinned}` : ''} provides ${requiredComponents.join(' and ')}`);
+  const pinned = process.env.VS_INSTALLATION?.toLowerCase();
+  const candidates = JSON.parse(execFileSync(vswhere, ['-products', '*', '-requires', arm64Tools, '-format', 'json'],
+    { encoding: 'utf8', windowsHide: true }))
+    .filter(entry => !pinned || entry.installationPath.toLowerCase() === pinned)
+    .sort((a, b) => b.installationVersion.localeCompare(a.installationVersion, 'en', { numeric: true }));
+  for (const candidate of candidates) {
+    const developer = developerEnvironment(candidate.installationPath);
+    if (developer) return selected = { path: candidate.installationPath, version: candidate.installationVersion, ...developer };
   }
-  const cmake = join(selected.installationPath, 'Common7', 'IDE', 'CommonExtensions', 'Microsoft', 'CMake', 'CMake', 'bin', 'cmake.exe');
-  if (!existsSync(cmake)) throw new Error(`Bundled CMake is missing from ${selected.installationPath}`);
-  return { path: selected.installationPath, version: selected.installationVersion, generator: generatorFor(selected.installationVersion), cmake };
-}
-
-/**
- * Locate the native ARM64 dumpbin of the selected installation.
- * @param {string} installation Visual Studio installation path.
- * @returns {string} dumpbin.exe path.
- */
-export function dumpbinPath(installation = visualStudio().path) {
-  const tools = join(installation, 'VC', 'Tools', 'MSVC');
-  for (const version of readdirSync(tools).sort((a, b) => b.localeCompare(a, 'en', { numeric: true }))) {
-    const file = join(tools, version, 'bin', 'Hostarm64', 'arm64', 'dumpbin.exe');
-    if (existsSync(file)) return file;
-  }
-  throw new Error(`ARM64 dumpbin is missing from ${installation}`);
+  throw new Error(`No Visual Studio installation${pinned ? ` at ${process.env.VS_INSTALLATION}` : ''} configures native ARM64 MSVC and a Windows SDK`);
 }
 
 /**

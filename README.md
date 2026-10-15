@@ -18,7 +18,7 @@ Upstream `sherpa-onnx-node` publishes no Windows ARM64 binary. This package ship
 Requirements:
 
 - Windows 11 ARM64 and native ARM64 Node.js 22 or later.
-- Visual Studio 2022 or 2026 (Build Tools suffice) with the MSVC ARM64 build tools (`Microsoft.VisualStudio.Component.VC.Tools.ARM64`) and C++ CMake tools (`Microsoft.VisualStudio.Component.VC.CMake.Project`).
+- Visual Studio 2022 or 2026 (Build Tools suffice) with the MSVC ARM64 build tools (`Microsoft.VisualStudio.Component.VC.Tools.ARM64`) and a Windows SDK. CMake is not required.
 
 ```powershell
 npm ci --ignore-scripts
@@ -27,12 +27,12 @@ npm run build
 npm run negative-control
 ```
 
-The build selects the newest Visual Studio installation that has both components and uses its bundled CMake, compiler and `dumpbin`; set `VS_INSTALLATION` to pin one installation path. Archives are extracted with Windows' built-in `tar.exe`, because GNU tar from Git or MSYS treats drive-letter colons as remote hosts.
+The build selects the newest Visual Studio installation whose `vcvarsall.bat arm64` configures native ARM64 MSVC and a Windows SDK, and uses that installation's compiler, linker and `dumpbin`; set `VS_INSTALLATION` to pin one installation path. Archives are extracted with Windows' built-in `tar.exe`, because GNU tar from Git or MSYS treats drive-letter colons as remote hosts.
 
 `npm run build`:
 
 1. Downloads the inputs pinned in [`lock.json`](lock.json) and verifies their SHA-256: the upstream source tag, the upstream static-runtime ARM64 libraries, node-addon-api, Node headers and `node.lib`, the node-gyp delay-load hook, the upstream `sherpa-onnx-node` JavaScript wrapper and the ONNX Runtime notices.
-2. Compiles the Node-API adapter from the upstream addon sources with [`CMakeLists.txt`](CMakeLists.txt): `/MT`, `NAPI_VERSION=8`, `/DELAYLOAD:node.exe`, no debug information and no absolute PDB path. Source `#line` directives keep build paths out of diagnostics.
+2. Compiles only the Node binding. Upstream releases ship the ARM64 runtime DLLs but no Node binding, so one `cl` invocation builds the upstream addon sources against the released `sherpa-onnx-c-api.lib`: `/MT`, `/EHsc` (node-addon-api C++ exceptions), `NAPI_VERSION=8`, the node-gyp delay-load hook with `/DELAYLOAD:node.exe`, no debug information and no absolute PDB path. Source `#line` directives keep build paths out of diagnostics.
 3. Stages exactly the 28 allowlisted files, runs a native resampling smoke test and packs the tarball into `dist/`.
 4. Audits the packed tarball: allowlist, no links or owner metadata, exact `package.json`, the ARM64 machine type from `dumpbin /HEADERS`, `dumpbin /DEPENDENTS` without dynamic MSVC runtime imports, and a scan for local user names, host names, paths, configured secrets and known credential formats. It then extracts the tarball and runs the smoke test again.
 

@@ -1,6 +1,7 @@
 /** Inspect actual PE machine types and imports with Microsoft's dumpbin before a package can be released. */
 import { execFileSync } from 'node:child_process';
-import { dumpbinPath } from './toolchain.mjs';
+import { join } from 'node:path';
+import { toolchain } from './toolchain.mjs';
 
 export function parseDependents(output) {
   if (!/File Type: DLL/i.test(output)) throw new Error('dumpbin did not identify a DLL');
@@ -22,7 +23,7 @@ export function parseMachine(output) {
 let dumpbin;
 
 export function inspectDependents(file) {
-  dumpbin ??= process.env.DUMPBIN || dumpbinPath();
+  dumpbin ??= process.env.DUMPBIN || join(toolchain().bin, 'dumpbin.exe');
   const options = { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 };
   const machine = parseMachine(execFileSync(dumpbin, ['/NOLOGO', '/HEADERS', file], options));
   const output = execFileSync(dumpbin, ['/NOLOGO', '/DEPENDENTS', file], options);
