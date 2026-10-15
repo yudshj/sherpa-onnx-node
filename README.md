@@ -102,7 +102,8 @@ npm accepts a trust relationship only for an existing package. Publish the first
 
 | Version | Packages |
 |---|---|
-| `1.13.8-r.2` | Unpublished. All four packages; Microsoft ONNX Runtime on every platform. `@yudshj/sherpa-onnx-win-arm64` becomes a binary-only platform package; depend on `@yudshj/sherpa-onnx-node` instead. |
+| `1.13.8-r.3` | All four packages, published from GitHub Actions with provenance. Same contents as `1.13.8-r.2`. |
+| `1.13.8-r.2` | All four packages, published from the owner account to create the new packages; no provenance. Microsoft ONNX Runtime on every platform. `@yudshj/sherpa-onnx-win-arm64` becomes a binary-only platform package; depend on `@yudshj/sherpa-onnx-node` instead. |
 | `1.13.8-mt.1` | `@yudshj/sherpa-onnx-win-arm64` only, self-contained. Ships the ONNX Runtime rebuild from the sherpa-onnx release archive. |
 | `1.13.8` | `@yudshj/sherpa-onnx-win-arm64` only, deprecated. Its binaries import `MSVCP140.dll` and `VCRUNTIME140.dll` without bundling them. |
 
