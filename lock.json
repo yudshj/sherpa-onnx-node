@@ -1,0 +1,42 @@
+{
+  "sherpaVersion": "1.13.8",
+  "assets": {
+    "source": {
+      "url": "https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/refs/tags/v1.13.8",
+      "sha256": "b0374cc56dbc186d442ae73d5de743bb092470b640c4c50ce7b029044c0c4fa8"
+    },
+    "libraries": {
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-arm64-shared-MT-Release-lib.tar.bz2",
+      "sha256": "22cd2b2b5e35c1132abc74a91ee77f683645437382617af6a4bd5818b9c509f4",
+      "bytes": 7622849
+    },
+    "api": {
+      "url": "https://registry.npmjs.org/node-addon-api/-/node-addon-api-8.3.0.tgz",
+      "sha256": "a0ce67653a251f56ea40d2eab08797934b6cfc9db4d48766795d97bb9b4d960d"
+    },
+    "headers": {
+      "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-headers.tar.gz",
+      "sha256": "57c6bee2e30bbbee5bd51d6cc343eb992e174b56a2a1d0eab7a7510771c20ea2"
+    },
+    "nodeLib": {
+      "url": "https://nodejs.org/dist/v24.21.0/win-arm64/node.lib",
+      "sha256": "2c0c3215d59c09d7c136da4949696dae121a299e9bdfc64cd9130a58610af63d"
+    },
+    "gyp": {
+      "url": "https://registry.npmjs.org/node-gyp/-/node-gyp-12.4.0.tgz",
+      "sha256": "c5651a4fa92942a36cf30e0f043119d4889e26e25f30ae28b8cecc16e705bf29"
+    },
+    "wrapper": {
+      "url": "https://registry.npmjs.org/sherpa-onnx-node/-/sherpa-onnx-node-1.13.8.tgz",
+      "sha256": "db2a7b8b18d950b6e9ca5c1c919afec33fd3dd2bfef1aade0bea5a9fe7a1f0f1"
+    },
+    "licenseOnnx": {
+      "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/LICENSE",
+      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+    },
+    "licenseOnnxThirdParty": {
+      "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/ThirdPartyNotices.txt",
+      "sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"
+    }
+  }
+}
