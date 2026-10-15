@@ -23,7 +23,24 @@ const sherpa = require('@yudshj/sherpa-onnx-node');
 
 npm installs only the platform package matching `os` and `cpu`. The upstream loader in the main package finds it at `../sherpa-onnx-<platform>-<arch>/sherpa-onnx.node`, the same layout as upstream's `sherpa-onnx-<platform>-<arch>` packages, so the JavaScript is unchanged. All four packages share one version.
 
-Upstream passthroughs: on macOS x64, Linux x64 and Linux ARM64 (glibc) the main package depends on upstream's own `sherpa-onnx-<platform>-<arch>@1.13.8` under the aliases `@yudshj/sherpa-onnx-darwin-x64`, `@yudshj/sherpa-onnx-linux-x64` and `@yudshj/sherpa-onnx-linux-arm64`, so one dependency covers every platform upstream `sherpa-onnx-node` covers plus Windows ARM64. These packages are upstream's unchanged builds, including their ONNX Runtime from `csukuangfj/onnxruntime-libs`; nothing here audits them. Microsoft stopped publishing macOS x86_64 ONNX Runtime binaries after 1.23, and sherpa-onnx 1.13.8 needs the ONNX Runtime 1.28 C API, so no trusted macOS x64 build exists. Windows x86 is not supported.
+Upstream passthroughs: on macOS x64, Linux x64 and Linux ARM64 (glibc) the main package depends on upstream's own `sherpa-onnx-<platform>-<arch>@1.13.8` under the aliases `@yudshj/sherpa-onnx-darwin-x64`, `@yudshj/sherpa-onnx-linux-x64` and `@yudshj/sherpa-onnx-linux-arm64`, so one dependency covers every platform upstream `sherpa-onnx-node` covers plus Windows ARM64. See [Trade-off: upstream passthroughs](#trade-off-upstream-passthroughs). Windows x86 is not supported.
+
+## Trade-off: upstream passthroughs
+
+The passthrough packages are upstream's unchanged builds. Their ONNX Runtime comes from `csukuangfj/onnxruntime-libs`, a rebuild published by the sherpa-onnx maintainer rather than by Microsoft, and nothing in this repository audits them: no pinned hash beyond what the consumer's lockfile records, no signature, no import check. A consumer on those platforms gets exactly what upstream `sherpa-onnx-node` would give it, no better and no worse.
+
+The alternative was to publish nothing for those platforms. Consumers would then have needed a second dependency on upstream `sherpa-onnx-node` plus platform selection logic, and on the platforms this repository does cover they would have installed two ONNX Runtimes, one of them the untrusted one. One dependency with explicit passthroughs keeps the covered platforms clean and the others unchanged.
+
+Why each passthrough exists:
+
+- **macOS x64.** Microsoft's last macOS x86_64 ONNX Runtime release is 1.23.2 (GitHub release and PyPI); 1.24 and later ship `osx-arm64` only. sherpa-onnx 1.13.8 links against the ONNX Runtime 1.28 C API, so no official binary can satisfy it.
+- **Linux x64 and ARM64.** Microsoft publishes `onnxruntime-linux-x64` and `onnxruntime-linux-aarch64` for 1.28.2. These are passthroughs only because this repository has not added Linux targets yet.
+
+TODO:
+
+- [ ] **macOS x64.** Build ONNX Runtime 1.28.2 (CPU only) from Microsoft's source tag on GitHub's `macos-15-intel` runner with a pinned source commit, package it like the other platforms, and publish `@yudshj/sherpa-onnx-darwin-x64` as a real platform package with provenance. The upstream `sherpa-onnx-c-api` library for macOS x64 already exists in the sherpa-onnx release (`osx-x64-shared-lib`).
+- [ ] **Linux x64 and ARM64.** Add `linux-x64` and `linux-arm64` targets on `ubuntu-24.04` and `ubuntu-24.04-arm`, taking Microsoft's Linux ONNX Runtime release and the sherpa-onnx `linux-*-shared` release library, with an ELF audit (`readelf`/`objdump`: machine, `NEEDED` closure, `RUNPATH` of `$ORIGIN` only, glibc symbol versions) matching the Windows and macOS audits.
+- [ ] Once a platform has its own package, drop its passthrough alias from the main manifest in the same release.
 
 Microsoft's macOS ONNX Runtime 1.28.2 is built for macOS 14.0, so the macOS package cannot load on macOS 13 or earlier.
 
@@ -99,7 +116,7 @@ npm accepts a trust relationship only for an existing package. Publish the first
 
 | Version | Packages |
 |---|---|
-| `1.13.8-r.4` | Unpublished. The main package adds the upstream passthrough aliases for macOS x64 and Linux; platform packages are unchanged. |
+| `1.13.8-r.4` | Current. The main package adds the upstream passthrough aliases for macOS x64 and Linux; platform packages are unchanged. |
 | `1.13.8-r.3` | All four packages, published from GitHub Actions with provenance. Same contents as `1.13.8-r.2`. |
 | `1.13.8-r.2` | All four packages, published from the owner account to create the new packages; no provenance. Microsoft ONNX Runtime on every platform. `@yudshj/sherpa-onnx-win-arm64` becomes a binary-only platform package; depend on `@yudshj/sherpa-onnx-node` instead. |
 | `1.13.8-mt.1` | `@yudshj/sherpa-onnx-win-arm64` only, self-contained. Ships the ONNX Runtime rebuild from the sherpa-onnx release archive. |
