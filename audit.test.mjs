@@ -160,7 +160,12 @@ test('requires pinned upstream binaries and skips only them and signed runtime l
 
 test('publishes one version: the main package depends on every platform package and declares the repository', () => {
   const main = manifest('main');
-  assert.deepEqual(main.optionalDependencies, Object.fromEntries(Object.keys(platforms).map(platform => [packageName(platform), version])));
+  assert.deepEqual(main.optionalDependencies, {
+    ...Object.fromEntries(Object.keys(platforms).map(platform => [packageName(platform), version])),
+    '@yudshj/sherpa-onnx-darwin-x64': 'npm:sherpa-onnx-darwin-x64@1.13.8',
+    '@yudshj/sherpa-onnx-linux-x64': 'npm:sherpa-onnx-linux-x64@1.13.8',
+    '@yudshj/sherpa-onnx-linux-arm64': 'npm:sherpa-onnx-linux-arm64@1.13.8',
+  });
   assert.equal(main.repository.url, 'git+https://github.com/yudshj/sherpa-onnx-node.git');
   assert.equal(main.os, undefined);
   for (const platform of Object.keys(platforms)) {

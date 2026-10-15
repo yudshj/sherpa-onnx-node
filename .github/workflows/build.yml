@@ -45,6 +45,9 @@ jobs:
       - name: Transcribe the upstream sample with SenseVoice and Silero VAD
         if: matrix.target != 'main'
         run: node accept.mjs ${{ matrix.target }}
+      - name: Load upstream's Linux x64 package through the passthrough alias
+        if: matrix.target == 'main'
+        run: node passthrough-smoke.mjs
       - name: Reject the earlier 1.13.8 and 1.13.8-mt.1 binaries
         if: matrix.target == 'win-arm64'
         run: npm run negative-control

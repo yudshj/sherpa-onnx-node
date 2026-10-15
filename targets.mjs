@@ -17,6 +17,17 @@ export const platforms = {
 };
 export const targets = ['main', ...Object.keys(platforms)];
 
+/**
+ * Platforms without an official Microsoft ONNX Runtime, or outside this repository's scope, keep upstream's own
+ * platform packages. The main package depends on them under scoped aliases so the unchanged upstream loader finds
+ * them beside itself; they are not rebuilt or audited here.
+ */
+export const passthrough = {
+  'darwin-x64': { package: 'sherpa-onnx-darwin-x64', label: 'macOS x64' },
+  'linux-x64': { package: 'sherpa-onnx-linux-x64', label: 'Linux x64 (glibc)' },
+  'linux-arm64': { package: 'sherpa-onnx-linux-arm64', label: 'Linux ARM64 (glibc)' },
+};
+
 /** Upstream JavaScript API from scripts/node-addon-api/lib of the source tag, shipped unchanged. */
 export const javascript = ['addon-static-import.js', 'addon.js', 'audio-tagg.js', 'keyword-spotter.js',
   'non-streaming-asr.js', 'non-streaming-speaker-diarization.js', 'non-streaming-speech-denoiser.js',
@@ -68,7 +79,10 @@ export function manifest(target) {
     return { name: packageName(target), version,
       description: `sherpa-onnx ${sherpaVersion} Node API for Windows x64, Windows ARM64 and macOS ARM64 with Microsoft ONNX Runtime ${onnxruntimeVersion}.`,
       main: 'sherpa-onnx.js', engines: { node: '>=18' }, ...common,
-      optionalDependencies: Object.fromEntries(Object.keys(platforms).map(platform => [packageName(platform), version])),
+      optionalDependencies: Object.fromEntries([
+        ...Object.keys(platforms).map(platform => [packageName(platform), version]),
+        ...Object.entries(passthrough).map(([platform, entry]) => [`@yudshj/sherpa-onnx-${platform}`, `npm:${entry.package}@${sherpaVersion}`]),
+      ]),
       files, publishConfig };
   }
   const { os, cpu, label } = platforms[target];
@@ -83,7 +97,9 @@ export function readme(target) {
     return `# ${packageName(target)}\n\nThe [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) ${sherpaVersion} Node API, unchanged from the upstream \`v${sherpaVersion}\` source tag, `
       + `with native binaries for ${Object.values(platforms).map(platform => platform.label).join(', ')}.\n\n`
       + `npm installs the matching \`@yudshj/sherpa-onnx-<platform>\` package. Each one contains the upstream \`sherpa-onnx-c-api\` library from the sherpa-onnx GitHub release, `
-      + `Microsoft's ONNX Runtime ${onnxruntimeVersion} release, and a Node-API binding compiled from the upstream sources. Other platforms are not supported.\n\n`
+      + `Microsoft's ONNX Runtime ${onnxruntimeVersion} release, and a Node-API binding compiled from the upstream sources.\n\n`
+      + `On ${Object.values(passthrough).map(entry => entry.label).join(', ')}, the same alias installs upstream's own \`sherpa-onnx-<platform>-<arch>\` ${sherpaVersion} package unchanged; `
+      + `those binaries are not audited here. Other platforms are not supported.\n\n`
       + `\`\`\`js\nconst sherpa = require('${packageName(target)}');\n\`\`\`\n\n${source}\n`;
   }
   const windows = isWindows(target);

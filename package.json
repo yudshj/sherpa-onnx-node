@@ -1,7 +1,7 @@
 {
   "name": "sherpa-onnx-node-release-tools",
   "private": true,
-  "version": "1.13.8-r.3",
+  "version": "1.13.8-r.4",
   "type": "module",
   "scripts": {
     "build": "node release.mjs build",
