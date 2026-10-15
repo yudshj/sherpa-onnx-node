@@ -47,16 +47,21 @@ export function checkClosure(dependencies, bundled) {
   }
 }
 
+const microsoftOrganization = name => /(?:^|, )O=Microsoft Corporation(?:,|$)/u.test(name ?? '');
+
 /**
- * Require valid embedded Microsoft Corporation Authenticode signatures on files that must come from Microsoft.
- * @param {Record<string, { status: string, subject: string }>} signatures Signature per file.
+ * Require a valid embedded Authenticode signature whose signer and issuing CA both belong to Microsoft Corporation.
+ * Microsoft signs ONNX Runtime as "Microsoft Corporation" and Visual C++ runtime libraries as "Microsoft Windows" or
+ * "Microsoft Windows Software Compatibility Publisher", all issued by Microsoft's own code signing CAs.
+ * @param {Record<string, { status: string, subject: string, issuer: string }>} signatures Signature per file.
  * @param {string[]} files Files that must be Microsoft-signed.
  */
 export function checkMicrosoftSignatures(signatures, files) {
   for (const file of files) {
     const signature = signatures[file];
-    if (signature?.status !== 'Valid' || !/^CN=Microsoft Corporation,/u.test(signature.subject)) {
-      throw new Error(`${file} must carry a valid Microsoft Corporation Authenticode signature; signtool: ${signature?.status ?? 'not run'}, signer: ${signature?.subject || 'none'}${signature?.signtool ? `\n${signature.signtool}` : ''}`);
+    if (signature?.status !== 'Valid' || !microsoftOrganization(signature.subject) || !microsoftOrganization(signature.issuer)) {
+      throw new Error(`${file} must carry a valid Authenticode signature from Microsoft Corporation; signtool: ${signature?.status ?? 'not run'}, `
+        + `signer: ${signature?.subject || 'none'}, issuer: ${signature?.issuer || 'none'}${signature?.signtool ? `\n${signature.signtool}` : ''}`);
     }
   }
 }
@@ -84,8 +89,9 @@ export function checkRuntimeVersions(dependencies, runtimeVersions) {
  */
 function embeddedSignatures(paths) {
   const script = "$ErrorActionPreference='Stop'; $result=[ordered]@{}; foreach ($path in ($env:AUDIT_FILES | ConvertFrom-Json)) {"
-    + ' try { $subject=([Security.Cryptography.X509Certificates.X509Certificate]::CreateFromSignedFile($path)).Subject } catch { $subject="" };'
-    + ' $result[[IO.Path]::GetFileName($path)]=[ordered]@{subject=$subject;version=(Get-Item -LiteralPath $path).VersionInfo.FileVersion} };'
+    + ' try { $cert=[Security.Cryptography.X509Certificates.X509Certificate]::CreateFromSignedFile($path); $subject=$cert.Subject; $issuer=$cert.Issuer }'
+    + ' catch { $subject=""; $issuer="" };'
+    + ' $result[[IO.Path]::GetFileName($path)]=[ordered]@{subject=$subject;issuer=$issuer;version=(Get-Item -LiteralPath $path).VersionInfo.FileVersion} };'
     + ' $result | ConvertTo-Json -Compress';
   const details = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
     { encoding: 'utf8', windowsHide: true, env: { ...process.env, AUDIT_FILES: JSON.stringify(paths) } }));

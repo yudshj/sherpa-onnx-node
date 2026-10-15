@@ -36,8 +36,8 @@ Microsoft's macOS ONNX Runtime 1.28.2 is built for macOS 14.0, so the macOS pack
 |---|---|---|
 | JavaScript API, `LICENSE` | sherpa-onnx `v1.13.8` source tag | SHA-256 of the tag archive; the file set must equal the allowlist |
 | `sherpa-onnx-c-api.dll` / `libsherpa-onnx-c-api.dylib` | sherpa-onnx `v1.13.8` GitHub release (`win-*-shared-MT-Release-lib`, `osx-arm64-shared-lib`) | SHA-256 of the release archive and of the shipped file |
-| `onnxruntime.dll`, `onnxruntime_providers_shared.dll`, `libonnxruntime.dylib`, license and notices | Microsoft's ONNX Runtime `v1.28.2` GitHub release | SHA-256 of the release archive and of the shipped file; on Windows also a valid embedded Microsoft Corporation signature |
-| `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll`, and on x64 `vcruntime140_1.dll` (Windows) | Visual C++ redistributable of the build's Visual Studio installation | Valid embedded Microsoft Corporation signature; version at least the newest linker of any bundled binary |
+| `onnxruntime.dll`, `onnxruntime_providers_shared.dll`, `libonnxruntime.dylib`, license and notices | Microsoft's ONNX Runtime `v1.28.2` GitHub release | SHA-256 of the release archive and of the shipped file; on Windows also a valid embedded Microsoft signature |
+| `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll`, and on x64 `vcruntime140_1.dll` (Windows) | Visual C++ redistributable of the build's Visual Studio installation | Valid embedded Microsoft signature; version at least the newest linker of any bundled binary |
 | `sherpa-onnx.node` | Compiled here from the tag's addon sources, node-addon-api 8.3.0, Node 24.21.0 headers and, on Windows, `node.lib` and the node-gyp 12.4.0 delay-load hook | SHA-256 of every input |
 
 Every pinned input and the SHA-256 of every shipped upstream binary are in [`lock.json`](lock.json).
@@ -71,7 +71,7 @@ node accept.mjs <win-x64|win-arm64|darwin-arm64>
    - exact file set, no links or owner metadata, exact `package.json`;
    - every repackaged upstream binary matches its pinned SHA-256;
    - every other file except signed Windows runtime libraries is scanned for local user names, host names, home and user paths, configured secrets and known credential formats;
-   - Windows: `dumpbin` reports the native machine type and imports limited to bundled files, the delay-loaded Node host and Windows components, and `signtool verify /pa` checks the Microsoft signatures;
+   - Windows: `dumpbin` reports the native machine type and imports limited to bundled files, the delay-loaded Node host and Windows components, and `signtool verify /pa` checks the embedded signatures of the Microsoft files, whose signer and issuing CA must both be `O=Microsoft Corporation`;
    - macOS: `lipo` reports only arm64, and `otool -l` shows dependencies limited to bundled files and system libraries, `@loader_path` as the only run path, and deployment targets no newer than macOS 14.0.
 5. Install the main and platform tarballs into a fresh `node_modules` and run the smoke test: load the API through the upstream loader, run native resampling and Silero VAD inference through ONNX Runtime, and require every eagerly loaded bundled library to come from the platform package rather than from the system, even where Windows provides its own `onnxruntime.dll`.
 

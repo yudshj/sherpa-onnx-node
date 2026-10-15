@@ -33,12 +33,16 @@ test('requires every import to be bundled, the Node host, or part of Windows', (
   assert.throws(() => checkClosure({ 'sherpa-onnx.node': { imports: ['KERNEL32.dll', 'libnode.dll'] } }, ['sherpa-onnx.node']), /libnode\.dll/);
 });
 
-test('requires valid Microsoft Corporation signatures on Microsoft binaries', () => {
-  const microsoft = { status: 'Valid', subject: 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US' };
-  checkMicrosoftSignatures({ 'onnxruntime.dll': microsoft }, ['onnxruntime.dll']);
-  for (const signature of [{ status: 'NotSigned', subject: '' }, { status: 'HashMismatch', subject: microsoft.subject },
-    { status: 'Valid', subject: 'CN=Microsoft Corporation Impostor, O=Example' }, undefined]) {
-    assert.throws(() => checkMicrosoftSignatures({ 'onnxruntime.dll': signature }, ['onnxruntime.dll']), /Microsoft Corporation Authenticode/);
+test('requires a valid signature whose signer and issuing CA belong to Microsoft Corporation', () => {
+  const issuer = 'CN=Microsoft Code Signing PCA 2011, O=Microsoft Corporation, L=Redmond, S=Washington, C=US';
+  const microsoft = { status: 'Valid', subject: 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US', issuer };
+  const compatibility = { status: 'Valid', issuer: 'CN=Microsoft Windows Third Party Component CA 2012, O=Microsoft Corporation, L=Redmond, S=Washington, C=US',
+    subject: 'CN=Microsoft Windows Software Compatibility Publisher, O=Microsoft Corporation, L=Redmond, S=Washington, C=US' };
+  checkMicrosoftSignatures({ 'onnxruntime.dll': microsoft, 'msvcp140.dll': compatibility }, ['onnxruntime.dll', 'msvcp140.dll']);
+  for (const signature of [{ status: 'NotSigned', subject: '', issuer: '' }, { ...microsoft, status: 'Invalid' },
+    { ...microsoft, subject: 'CN=Microsoft Corporation, O=Example' }, { ...microsoft, subject: 'CN=Microsoft Corporation, O=Microsoft Corporation Impostor' },
+    { ...microsoft, issuer: 'CN=Example Code Signing CA, O=Example CA' }, undefined]) {
+    assert.throws(() => checkMicrosoftSignatures({ 'onnxruntime.dll': signature }, ['onnxruntime.dll']), /signature from Microsoft Corporation/);
   }
 });
 
