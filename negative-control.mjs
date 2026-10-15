@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as tar from 'tar';
-import { inspectBinaries } from './import-audit.mjs';
+import { inspectWindowsBinaries } from './windows-audit.mjs';
 
 const earlier = [
   { version: '1.13.8', integrity: 'nHTPuj4tZ1+eRc8t5nr5gYt1svzh/xPJPhWO1a1J81qBeFx8U/RbNWYZjwzBz9L55Ca9dtTGTXFbeswAJr1IeA==',
@@ -13,7 +13,7 @@ const earlier = [
   { version: '1.13.8-mt.1', integrity: 'qNrX+IEW+kcMoCbMDYZVMSH2T+jlFGK+UdFadfmGOXvbaSrXG8gAjaDftrz+EINB8E3zP9vSSQ200NVFSOr9YQ==',
     rejection: /^onnxruntime\.dll must carry a valid Microsoft Corporation Authenticode signature$/u },
 ];
-const policy = { binaries: ['sherpa-onnx.node', 'sherpa-onnx-c-api.dll', 'onnxruntime.dll', 'onnxruntime_providers_shared.dll'],
+const policy = { arch: 'arm64', binaries: ['sherpa-onnx.node', 'sherpa-onnx-c-api.dll', 'onnxruntime.dll', 'onnxruntime_providers_shared.dll'],
   microsoft: ['onnxruntime.dll', 'onnxruntime_providers_shared.dll'], runtime: [] };
 
 const evidence = join(import.meta.dirname, 'dist', 'evidence');
@@ -29,7 +29,7 @@ for (const { version, integrity, rejection } of earlier) {
   try {
     writeFileSync(join(work, 'package.tgz'), bytes);
     await tar.x({ file: join(work, 'package.tgz'), cwd: work, strict: true });
-    assert.throws(() => inspectBinaries(join(work, 'package'), policy), error => {
+    assert.throws(() => inspectWindowsBinaries(join(work, 'package'), policy), error => {
       assert.match(error.message, rejection);
       output[version] = { rejected: true, reason: error.message };
       return true;

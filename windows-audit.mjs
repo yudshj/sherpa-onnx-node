@@ -1,9 +1,12 @@
-/** Inspect PE machine types, import closure and publisher signatures with Microsoft's tools before release. */
+/** Inspect Windows PE machine types, import closure and publisher signatures with Microsoft's tools before release. */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { toolchain } from './toolchain.mjs';
+import { windowsToolchain } from './toolchain.mjs';
 
-/** Windows components present on every supported Windows 10/11 ARM64 installation. */
+/** PE machine field of each supported architecture. */
+export const machines = { x64: '8664', arm64: 'AA64' };
+
+/** Windows components present on every supported Windows 10/11 installation. */
 const systemLibraries = new Set(['kernel32.dll', 'advapi32.dll', 'setupapi.dll', 'dbghelp.dll', 'dxgi.dll']);
 
 export function isSystemLibrary(name) {
@@ -18,10 +21,13 @@ export function parseDependents(output) {
   return imports;
 }
 
-export function parseHeaders(output) {
-  const machine = output.match(/^\s*([0-9A-F]+) machine \(([^)]+)\)/imu);
+export function parseHeaders(output, arch) {
+  const machine = output.match(/^\s*([0-9A-F]+) machine \(([^)]+)\)(.*)$/imu);
   if (!machine) throw new Error('dumpbin did not report a machine type');
-  if (machine[1].toUpperCase() !== 'AA64') throw new Error(`Expected an ARM64 binary; dumpbin reported ${machine[1]} machine (${machine[2]})`);
+  // ARM64X and ARM64EC images report an x64 machine followed by an ARM64 annotation; neither is a native image.
+  if (machine[1].toUpperCase() !== machines[arch] || /ARM64/iu.test(machine[3])) {
+    throw new Error(`Expected a native ${arch} binary; dumpbin reported ${machine[0].trim()}`);
+  }
   const linker = output.match(/^\s*([0-9]+\.[0-9]+) linker version/imu);
   if (!linker) throw new Error('dumpbin did not report a linker version');
   return { machine: machine[2], linker: linker[1] };
@@ -84,7 +90,7 @@ function embeddedSignatures(paths) {
     { encoding: 'utf8', windowsHide: true, env: { ...process.env, AUDIT_FILES: JSON.stringify(paths) } }));
   for (const path of paths) {
     const file = path.split(/[\\/]/u).at(-1);
-    const verified = spawnSync(toolchain().signtool, ['verify', '/pa', '/q', path], { windowsHide: true });
+    const verified = spawnSync(windowsToolchain().signtool, ['verify', '/pa', '/q', path], { windowsHide: true });
     details[file] = { status: verified.status === 0 ? 'Valid' : details[file].subject ? 'Invalid' : 'NotSigned', ...details[file] };
   }
   return details;
@@ -95,17 +101,17 @@ let dumpbin;
 /**
  * Inspect bundled binaries in one directory.
  * @param {string} directory Directory containing the binaries.
- * @param {{ binaries: string[], microsoft: string[], runtime: string[] }} policy Bundled binaries, files that must be
- *   Microsoft-signed, and C++ runtime libraries whose version must cover every linker.
+ * @param {{ arch: string, binaries: string[], microsoft: string[], runtime: string[] }} policy Machine architecture,
+ *   bundled binaries, files that must be Microsoft-signed, and C++ runtime libraries whose version must cover every linker.
  * @returns {{ dependencies: Record<string, object>, signatures: Record<string, object> }} Evidence for the audit report.
  */
-export function inspectBinaries(directory, policy) {
-  dumpbin ??= process.env.DUMPBIN || join(toolchain().bin, 'dumpbin.exe');
+export function inspectWindowsBinaries(directory, policy) {
+  dumpbin ??= process.env.DUMPBIN || join(windowsToolchain().bin, 'dumpbin.exe');
   const options = { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 };
   const dependencies = {};
   for (const file of policy.binaries) {
     const path = join(directory, file);
-    const headers = parseHeaders(execFileSync(dumpbin, ['/NOLOGO', '/HEADERS', path], options));
+    const headers = parseHeaders(execFileSync(dumpbin, ['/NOLOGO', '/HEADERS', path], options), policy.arch);
     const output = execFileSync(dumpbin, ['/NOLOGO', '/DEPENDENTS', path], options);
     dependencies[file] = { ...headers, imports: parseDependents(output), dumpbin: output.replace(/^Dump of file.*$/mu, `Dump of file ${file}`) };
   }

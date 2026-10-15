@@ -1,42 +1,194 @@
 {
   "sherpaVersion": "1.13.8",
   "onnxruntimeVersion": "1.28.2",
-  "assets": {
+  "common": {
     "source": {
       "url": "https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/refs/tags/v1.13.8",
       "sha256": "b0374cc56dbc186d442ae73d5de743bb092470b640c4c50ce7b029044c0c4fa8",
       "root": "sherpa-onnx-1.13.8",
-      "members": ["LICENSE", "sherpa-onnx/c-api/c-api.h", "harmony-os/SherpaOnnxHar/sherpa_onnx/src/main/cpp", "scripts/node-addon-api/lib"]
-    },
-    "libraries": {
-      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-arm64-shared-MT-Release-lib.tar.bz2",
-      "sha256": "22cd2b2b5e35c1132abc74a91ee77f683645437382617af6a4bd5818b9c509f4",
-      "bytes": 7622849,
-      "root": "sherpa-onnx-v1.13.8-win-arm64-shared-MT-Release-lib",
-      "members": ["lib/sherpa-onnx-c-api.dll", "lib/sherpa-onnx-c-api.lib"]
-    },
-    "onnxruntime": {
-      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-arm64-1.28.2.zip",
-      "sha256": "a3ab2265e52d157ef1c4f4f82f66fc582ce12a780510aac240690ce194b58510",
-      "bytes": 79713523,
-      "root": "onnxruntime-win-arm64-1.28.2",
-      "members": ["LICENSE", "ThirdPartyNotices.txt", "lib/onnxruntime.dll", "lib/onnxruntime_providers_shared.dll"]
+      "members": [
+        "LICENSE",
+        "sherpa-onnx/c-api/c-api.h",
+        "harmony-os/SherpaOnnxHar/sherpa_onnx/src/main/cpp",
+        "scripts/node-addon-api/lib"
+      ]
     },
     "api": {
       "url": "https://registry.npmjs.org/node-addon-api/-/node-addon-api-8.3.0.tgz",
-      "sha256": "a0ce67653a251f56ea40d2eab08797934b6cfc9db4d48766795d97bb9b4d960d"
+      "sha256": "a0ce67653a251f56ea40d2eab08797934b6cfc9db4d48766795d97bb9b4d960d",
+      "root": "package",
+      "members": [
+        "LICENSE.md",
+        "napi.h",
+        "napi-inl.h",
+        "napi-inl.deprecated.h"
+      ]
     },
     "headers": {
       "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-headers.tar.gz",
-      "sha256": "57c6bee2e30bbbee5bd51d6cc343eb992e174b56a2a1d0eab7a7510771c20ea2"
+      "sha256": "57c6bee2e30bbbee5bd51d6cc343eb992e174b56a2a1d0eab7a7510771c20ea2",
+      "root": "node-v24.21.0",
+      "members": [
+        "include/node"
+      ]
+    }
+  },
+  "targets": {
+    "win-x64": {
+      "assets": {
+        "nodeLib": {
+          "url": "https://nodejs.org/dist/v24.21.0/win-x64/node.lib",
+          "sha256": "a0a84aa03917b578d286010b7521837e9ff1136ffb2e4a406c14316c33fd06f7"
+        },
+        "gyp": {
+          "url": "https://registry.npmjs.org/node-gyp/-/node-gyp-12.4.0.tgz",
+          "sha256": "c5651a4fa92942a36cf30e0f043119d4889e26e25f30ae28b8cecc16e705bf29",
+          "root": "package",
+          "members": [
+            "LICENSE",
+            "src/win_delay_load_hook.cc"
+          ]
+        },
+        "sherpa": {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-x64-shared-MT-Release-lib.tar.bz2",
+          "sha256": "b8eedf41bd6d3779218887b48367bb7a3ece5aaa7667f01f69ee823a12b0a9e7",
+          "root": "sherpa-onnx-v1.13.8-win-x64-shared-MT-Release-lib",
+          "members": [
+            "lib/sherpa-onnx-c-api.dll",
+            "lib/sherpa-onnx-c-api.lib"
+          ],
+          "ship": {
+            "sherpa-onnx-c-api.dll": {
+              "path": "lib/sherpa-onnx-c-api.dll",
+              "sha256": "300e0c88400903fc4cfc88be88a8ae587a24cc658653e0e1fd1c2b8dbbc68557"
+            }
+          }
+        },
+        "onnxruntime": {
+          "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-x64-1.28.2.zip",
+          "sha256": "c4eedd29489d5feca21866d054638416f3655bf6b18851b3b6b85c8313e95c35",
+          "root": "onnxruntime-win-x64-1.28.2",
+          "members": [
+            "LICENSE",
+            "ThirdPartyNotices.txt",
+            "lib/onnxruntime.dll",
+            "lib/onnxruntime_providers_shared.dll"
+          ],
+          "ship": {
+            "onnxruntime.dll": {
+              "path": "lib/onnxruntime.dll",
+              "sha256": "1becbd71adbf49609d33195e29c9214969db3c3de69c81425bebe5a4b69aef97"
+            },
+            "onnxruntime_providers_shared.dll": {
+              "path": "lib/onnxruntime_providers_shared.dll",
+              "sha256": "2e3a2a3903f1d4b1b15cd6887593ed2f269cd2b24e3d729fead45406ec9a25ac"
+            }
+          }
+        }
+      }
     },
-    "nodeLib": {
-      "url": "https://nodejs.org/dist/v24.21.0/win-arm64/node.lib",
-      "sha256": "2c0c3215d59c09d7c136da4949696dae121a299e9bdfc64cd9130a58610af63d"
+    "win-arm64": {
+      "assets": {
+        "nodeLib": {
+          "url": "https://nodejs.org/dist/v24.21.0/win-arm64/node.lib",
+          "sha256": "2c0c3215d59c09d7c136da4949696dae121a299e9bdfc64cd9130a58610af63d"
+        },
+        "gyp": {
+          "url": "https://registry.npmjs.org/node-gyp/-/node-gyp-12.4.0.tgz",
+          "sha256": "c5651a4fa92942a36cf30e0f043119d4889e26e25f30ae28b8cecc16e705bf29",
+          "root": "package",
+          "members": [
+            "LICENSE",
+            "src/win_delay_load_hook.cc"
+          ]
+        },
+        "sherpa": {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-arm64-shared-MT-Release-lib.tar.bz2",
+          "sha256": "22cd2b2b5e35c1132abc74a91ee77f683645437382617af6a4bd5818b9c509f4",
+          "root": "sherpa-onnx-v1.13.8-win-arm64-shared-MT-Release-lib",
+          "members": [
+            "lib/sherpa-onnx-c-api.dll",
+            "lib/sherpa-onnx-c-api.lib"
+          ],
+          "ship": {
+            "sherpa-onnx-c-api.dll": {
+              "path": "lib/sherpa-onnx-c-api.dll",
+              "sha256": "48fc834012df0874d60282f0575705f133a1130b5a57cdcdcfb848fd42b47439"
+            }
+          }
+        },
+        "onnxruntime": {
+          "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-arm64-1.28.2.zip",
+          "sha256": "a3ab2265e52d157ef1c4f4f82f66fc582ce12a780510aac240690ce194b58510",
+          "root": "onnxruntime-win-arm64-1.28.2",
+          "members": [
+            "LICENSE",
+            "ThirdPartyNotices.txt",
+            "lib/onnxruntime.dll",
+            "lib/onnxruntime_providers_shared.dll"
+          ],
+          "ship": {
+            "onnxruntime.dll": {
+              "path": "lib/onnxruntime.dll",
+              "sha256": "0eedf83108fd7786b50e7080de713026c0b08d53f6eace8b49c60f890ac95264"
+            },
+            "onnxruntime_providers_shared.dll": {
+              "path": "lib/onnxruntime_providers_shared.dll",
+              "sha256": "05a87b2c6ccf264e49a597856cbee2ff3450ce705e2f4fc2b7c932768abecbd3"
+            }
+          }
+        }
+      }
     },
-    "gyp": {
-      "url": "https://registry.npmjs.org/node-gyp/-/node-gyp-12.4.0.tgz",
-      "sha256": "c5651a4fa92942a36cf30e0f043119d4889e26e25f30ae28b8cecc16e705bf29"
+    "darwin-arm64": {
+      "assets": {
+        "sherpa": {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-osx-arm64-shared-lib.tar.bz2",
+          "sha256": "ae77050cdae565496059d96f5ab33d77b397a0864282a4e4a26e3b3b3effb948",
+          "root": "sherpa-onnx-v1.13.8-osx-arm64-shared-lib",
+          "members": [
+            "lib/libsherpa-onnx-c-api.dylib"
+          ],
+          "ship": {
+            "libsherpa-onnx-c-api.dylib": {
+              "path": "lib/libsherpa-onnx-c-api.dylib",
+              "sha256": "ee098d8b419d49b92101cde3c970a333b361066eb2d79a11ab480a116552b908"
+            }
+          }
+        },
+        "onnxruntime": {
+          "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-osx-arm64-1.28.2.tgz",
+          "sha256": "c4fceacfc53765d0869dc9180c31ec91054d149017a99d1e80ffe28dc79596de",
+          "root": "onnxruntime-osx-arm64-1.28.2",
+          "members": [
+            "LICENSE",
+            "ThirdPartyNotices.txt",
+            "lib/libonnxruntime.1.28.2.dylib"
+          ],
+          "ship": {
+            "libonnxruntime.dylib": {
+              "path": "lib/libonnxruntime.1.28.2.dylib",
+              "sha256": "c986ef16fd63406bc2cee8cc7cc056189b07c587beb9b79d29e31c3cca129e98"
+            }
+          }
+        }
+      }
+    }
+  },
+  "testAssets": {
+    "sileroVad": {
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+      "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
+    },
+    "senseVoice": {
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
+      "sha256": "7d1efa2138a65b0b488df37f8b89e3d91a60676e416f515b952358d83dfd347e",
+      "root": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+      "members": [
+        "model.int8.onnx",
+        "tokens.txt",
+        "test_wavs/zh.wav"
+      ]
     }
   }
 }

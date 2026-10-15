@@ -1,30 +1,10 @@
-/** Fail closed on unexpected archive contents or local identifying data. */
+/** Fail closed on unexpected archive contents, changed upstream files, or local identifying data. */
 import { createHash } from 'node:crypto';
-import { readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { homedir, hostname, userInfo, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as tar from 'tar';
-import { inspectBinaries } from './import-audit.mjs';
-
-export const name = '@yudshj/sherpa-onnx-win-arm64';
-/** The release version is the tools package version; bump it before every publication. */
-export const version = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
-const lock = JSON.parse(readFileSync(new URL('./lock.json', import.meta.url), 'utf8'));
-export const upstreamVersion = lock.sherpaVersion;
-export const onnxruntimeVersion = lock.onnxruntimeVersion;
-export const repository = 'https://github.com/yudshj/sherpa-onnx-node';
-if (!version.startsWith(`${upstreamVersion}-`)) throw new Error(`Version ${version} must be a prerelease of upstream ${upstreamVersion}`);
-export const wrappers = ['addon-static-import.js', 'addon.js', 'audio-tagg.js', 'keyword-spotter.js',
-  'non-streaming-asr.js', 'non-streaming-speaker-diarization.js', 'non-streaming-speech-denoiser.js',
-  'non-streaming-tts.js', 'online-speech-denoiser.js', 'punctuation.js', 'resampler.js', 'sherpa-onnx.js',
-  'speaker-identification.js', 'spoken-language-identification.js', 'streaming-asr.js', 'types.js', 'vad.js'];
-/** Microsoft Visual C++ runtime libraries imported by Microsoft's ONNX Runtime, deployed beside it. */
-export const runtimeLibraries = ['msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll'];
-/** Binaries that must carry a valid Microsoft Corporation signature. */
-export const microsoftBinaries = ['onnxruntime.dll', 'onnxruntime_providers_shared.dll', ...runtimeLibraries];
-export const binaries = ['sherpa-onnx.node', 'sherpa-onnx-c-api.dll', ...microsoftBinaries];
-export const files = [...wrappers, ...binaries, 'package.json', 'README.md', 'LICENSE',
-  'LICENSE-node-gyp', 'LICENSE-node-addon-api', 'LICENSE-onnxruntime', 'ThirdPartyNotices-onnxruntime.txt'];
+import { binaries, isWindows, manifest, minimumMacOS, packageFiles, packageName, pinnedFiles, platforms, version, windowsRuntime } from './targets.mjs';
 
 /** Sensitive values are kept in memory and never included in diagnostics. */
 export function privateValues(extra = []) {
@@ -51,14 +31,28 @@ export function scanBytes(bytes, sensitive) {
     }
   }
   for (const text of [bytes.toString('latin1'), bytes.toString('utf16le')]) {
-    if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|npm_[A-Za-z0-9]{30,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|[A-Z]:[\\/]Users[\\/][^\s\x00"<>]+|[\\/]home[\\/][^\s\x00"<>]+/iu.test(text)) {
+    if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|npm_[A-Za-z0-9]{30,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|[A-Z]:[\\/]Users[\\/][^\s\x00"<>]+|\/(?:home|Users)\/[^\s\x00"<>/]+\//iu.test(text)) {
       throw new Error('Private path or credential pattern detected (value redacted)');
     }
   }
 }
 
-export async function auditContents(path, sensitive = privateValues()) {
-  scanBytes(readFileSync(path), sensitive);
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * Check one package tarball without extracting it: exact file set, no links or owner metadata, exact package.json,
+ * pinned hashes for repackaged upstream binaries, and a privacy scan of every other file. Upstream binaries carry
+ * their publishers' build paths; the pinned hash proves they are unchanged instead. Windows runtime libraries are
+ * verified by their Microsoft signatures in auditTarball.
+ * @param {string} path Tarball path.
+ * @param {string} target Package target.
+ * @param {string[]} sensitive Private values that must not appear in generated files.
+ * @returns {Promise<{ name: string, version: string, target: string, sha512: string, files: object[] }>} Audit report.
+ */
+export async function auditContents(path, target, sensitive = privateValues()) {
+  const files = packageFiles(target);
+  const pinned = pinnedFiles(target);
+  const signed = new Set(isWindows(target) ? windowsRuntime : []);
   const seen = new Set();
   const records = [];
   let failure;
@@ -74,34 +68,43 @@ export async function auditContents(path, sensitive = privateValues()) {
     entry.on('end', () => {
       try {
         const bytes = Buffer.concat(chunks);
-        scanBytes(bytes, sensitive);
-        if (base === 'package.json') {
-          const manifest = JSON.parse(bytes.toString('utf8'));
-          if (JSON.stringify(manifest) !== JSON.stringify(packageManifest())) throw new Error('Unexpected package manifest');
+        const digest = sha256(bytes);
+        if (pinned[base]) {
+          if (digest !== pinned[base]) throw new Error(`${base} differs from the pinned upstream file`);
+        } else if (!signed.has(base)) scanBytes(bytes, sensitive);
+        if (base === 'package.json' && JSON.stringify(JSON.parse(bytes.toString('utf8'))) !== JSON.stringify(manifest(target))) {
+          throw new Error('Unexpected package manifest');
         }
-        records.push({ file: base, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
+        records.push({ file: base, bytes: bytes.length, sha256: digest });
       } catch (error) { failure ??= error; }
     });
   } });
   if (failure) throw failure;
   if (seen.size !== files.length || files.some(file => !seen.has(file))) throw new Error('Incomplete package');
-  return { name, version, sha512: createHash('sha512').update(readFileSync(path)).digest('base64'),
+  return { name: packageName(target), version, target, sha512: createHash('sha512').update(readFileSync(path)).digest('base64'),
     files: records.sort((a, b) => a.file.localeCompare(b.file)) };
 }
 
-export function packageManifest() {
-  return { name, version, description: `Windows ARM64 sherpa-onnx ${upstreamVersion} Node API with Microsoft ONNX Runtime ${onnxruntimeVersion}.`,
-    main: 'sherpa-onnx.js', os: ['win32'], cpu: ['arm64'], engines: { node: '>=18' }, license: 'Apache-2.0',
-    repository: { type: 'git', url: `git+${repository}.git` },
-    files: files.filter(file => file !== 'package.json'), publishConfig: { access: 'public', registry: 'https://registry.npmjs.org/' } };
-}
-
-/** Full publication gate: metadata and privacy checks, then machine, import closure and Microsoft signature inspection. */
-export async function auditTarball(path, sensitive = privateValues()) {
-  const report = await auditContents(path, sensitive);
-  const work = mkdtempSync(join(tmpdir(), 'sherpa-import-audit-'));
+/**
+ * Full publication gate: tarball checks, then native inspection of every binary on its own platform.
+ * @param {string} path Tarball path.
+ * @param {string} target Package target.
+ * @param {string[]} sensitive Private values that must not appear in generated files.
+ * @returns {Promise<object>} Audit report including binary evidence.
+ */
+export async function auditTarball(path, target, sensitive = privateValues()) {
+  const report = await auditContents(path, target, sensitive);
+  if (target === 'main') return report;
+  const work = mkdtempSync(join(tmpdir(), 'sherpa-binary-audit-'));
   try {
     await tar.x({ file: path, cwd: work, strict: true });
-    return { ...report, ...inspectBinaries(join(work, 'package'), { binaries, microsoft: microsoftBinaries, runtime: runtimeLibraries }) };
+    const directory = join(work, 'package');
+    if (isWindows(target)) {
+      const { inspectWindowsBinaries } = await import('./windows-audit.mjs');
+      return { ...report, ...inspectWindowsBinaries(directory, { arch: platforms[target].cpu, binaries: binaries(target),
+        microsoft: binaries(target).filter(file => /^onnxruntime/u.test(file) || windowsRuntime.includes(file)), runtime: windowsRuntime }) };
+    }
+    const { inspectMacBinaries } = await import('./macos-audit.mjs');
+    return { ...report, ...inspectMacBinaries(directory, { binaries: binaries(target), minimum: minimumMacOS }) };
   } finally { rmSync(work, { recursive: true, force: true, maxRetries: 10 }); }
 }
