@@ -24,7 +24,7 @@ export const javascript = ['addon-static-import.js', 'addon.js', 'audio-tagg.js'
   'speaker-identification.js', 'spoken-language-identification.js', 'streaming-asr.js', 'types.js', 'vad.js'];
 
 /** Microsoft Visual C++ runtime libraries that Microsoft's Windows ONNX Runtime imports, deployed beside it. */
-export const windowsRuntime = ['msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll'];
+export const runtimeLibraries = target => lock.targets[target]?.runtime ?? [];
 /** Microsoft's macOS ONNX Runtime 1.28.2 is built for macOS 14.0. */
 export const minimumMacOS = '14.0';
 
@@ -53,7 +53,7 @@ export function packageFiles(target) {
   assertTarget(target);
   if (target === 'main') return [...javascript, 'LICENSE', 'README.md', 'package.json'];
   const windows = isWindows(target);
-  return ['sherpa-onnx.node', ...Object.keys(pinnedFiles(target)), ...(windows ? windowsRuntime : []),
+  return ['sherpa-onnx.node', ...Object.keys(pinnedFiles(target)), ...runtimeLibraries(target),
     'LICENSE', 'LICENSE-node-addon-api', ...(windows ? ['LICENSE-node-gyp'] : []), 'LICENSE-onnxruntime',
     'ThirdPartyNotices-onnxruntime.txt', 'README.md', 'package.json'];
 }
@@ -90,7 +90,7 @@ export function readme(target) {
   return `# ${packageName(target)}\n\n${platforms[target].label} binaries for [@yudshj/sherpa-onnx-node](https://www.npmjs.com/package/@yudshj/sherpa-onnx-node); install that package instead.\n\n`
     + `- \`sherpa-onnx-c-api\`: unchanged from the sherpa-onnx v${sherpaVersion} GitHub release.\n`
     + `- ONNX Runtime: unchanged from Microsoft's ONNX Runtime ${onnxruntimeVersion} GitHub release${windows ? ', Microsoft-signed' : ''}.\n`
-    + (windows ? `- \`${windowsRuntime.join('`, `')}\`: Microsoft-signed Visual C++ runtime libraries, so no Visual C++ Redistributable installation is required.\n` : '')
+    + (windows ? `- \`${runtimeLibraries(target).join('`, `')}\`: Microsoft-signed Visual C++ runtime libraries, so no Visual C++ Redistributable installation is required.\n` : '')
     + `- \`sherpa-onnx.node\`: Node-API v8 binding compiled from the upstream sources${windows ? ' with the Electron delay-load hook' : ''}.\n\n`
     + `It has no installation scripts, downloads, credentials, models, or recordings.\n\n${source}\n`;
 }

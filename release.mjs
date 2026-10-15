@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdir
 import { dirname, join } from 'node:path';
 import * as tar from 'tar';
 import { auditTarball, privateValues, scanBytes } from './audit.mjs';
-import { binaries, isWindows, javascript, lock, manifest, minimumMacOS, packageFiles, packageName, platforms, readme, tarballName, targets, version, windowsRuntime } from './targets.mjs';
+import { binaries, isWindows, javascript, lock, manifest, minimumMacOS, packageFiles, packageName, platforms, readme, runtimeLibraries, tarballName, targets, version } from './targets.mjs';
 import { macToolchain, systemTar, windowsToolchain } from './toolchain.mjs';
 
 const root = import.meta.dirname;
@@ -81,7 +81,7 @@ async function buildMain(work, sensitive) {
   return pack(stage, 'main', sensitive);
 }
 
-function compileWindows(work, compiled, sources) {
+function compileWindows(target, work, compiled, sources) {
   const vs = windowsToolchain();
   console.log(`Visual Studio ${vs.version} at ${vs.path}; MSVC ${vs.environment.VCToolsVersion} ${vs.arch}; Windows SDK ${vs.environment.WindowsSDKVersion.replace(/\\$/u, '')}`);
   // /EHsc enables node-addon-api C++ exceptions; the delay-loaded host lets Electron's executable provide Node-API.
@@ -93,7 +93,7 @@ function compileWindows(work, compiled, sources) {
   const runtimeRoot = join(vs.environment.VCToolsRedistDir, vs.arch);
   const runtimeDirectory = readdirSync(runtimeRoot).find(entry => /^Microsoft\.VC\d+\.CRT$/u.test(entry));
   if (!runtimeDirectory) throw new Error(`No ${vs.arch} C++ runtime redistributable under ${runtimeRoot}`);
-  return Object.fromEntries(windowsRuntime.map(file => [file, join(runtimeRoot, runtimeDirectory, file)]));
+  return Object.fromEntries(runtimeLibraries(target).map(file => [file, join(runtimeRoot, runtimeDirectory, file)]));
 }
 
 function compileMac(work, compiled, sources) {
@@ -120,7 +120,7 @@ async function buildPlatform(target, work, sensitive) {
   mkdirSync(compiled);
   const bindingRoot = join(work, 'source', 'harmony-os', 'SherpaOnnxHar', 'sherpa_onnx', 'src', 'main', 'cpp');
   const sources = readdirSync(bindingRoot).filter(file => file.endsWith('.cc') && file !== 'utils.cc').sort().map(file => join(bindingRoot, file));
-  const runtime = isWindows(target) ? compileWindows(work, compiled, sources) : compileMac(work, compiled, sources);
+  const runtime = isWindows(target) ? compileWindows(target, work, compiled, sources) : compileMac(work, compiled, sources);
   const stage = join(work, target);
   mkdirSync(stage);
   copyFileSync(join(compiled, 'sherpa-onnx.node'), join(stage, 'sherpa-onnx.node'));

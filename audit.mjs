@@ -4,7 +4,7 @@ import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { homedir, hostname, userInfo, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as tar from 'tar';
-import { binaries, isWindows, manifest, minimumMacOS, packageFiles, packageName, pinnedFiles, platforms, version, windowsRuntime } from './targets.mjs';
+import { binaries, isWindows, manifest, minimumMacOS, packageFiles, packageName, pinnedFiles, platforms, runtimeLibraries, version } from './targets.mjs';
 
 /** Sensitive values are kept in memory and never included in diagnostics. */
 export function privateValues(extra = []) {
@@ -52,7 +52,7 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export async function auditContents(path, target, sensitive = privateValues()) {
   const files = packageFiles(target);
   const pinned = pinnedFiles(target);
-  const signed = new Set(isWindows(target) ? windowsRuntime : []);
+  const signed = new Set(runtimeLibraries(target));
   const seen = new Set();
   const records = [];
   let failure;
@@ -102,7 +102,8 @@ export async function auditTarball(path, target, sensitive = privateValues()) {
     if (isWindows(target)) {
       const { inspectWindowsBinaries } = await import('./windows-audit.mjs');
       return { ...report, ...inspectWindowsBinaries(directory, { arch: platforms[target].cpu, binaries: binaries(target),
-        microsoft: binaries(target).filter(file => /^onnxruntime/u.test(file) || windowsRuntime.includes(file)), runtime: windowsRuntime }) };
+        microsoft: binaries(target).filter(file => /^onnxruntime/u.test(file) || runtimeLibraries(target).includes(file)),
+        runtime: runtimeLibraries(target) }) };
     }
     const { inspectMacBinaries } = await import('./macos-audit.mjs');
     return { ...report, ...inspectMacBinaries(directory, { binaries: binaries(target), minimum: minimumMacOS }) };

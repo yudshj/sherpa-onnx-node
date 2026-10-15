@@ -37,7 +37,7 @@ Microsoft's macOS ONNX Runtime 1.28.2 is built for macOS 14.0, so the macOS pack
 | JavaScript API, `LICENSE` | sherpa-onnx `v1.13.8` source tag | SHA-256 of the tag archive; the file set must equal the allowlist |
 | `sherpa-onnx-c-api.dll` / `libsherpa-onnx-c-api.dylib` | sherpa-onnx `v1.13.8` GitHub release (`win-*-shared-MT-Release-lib`, `osx-arm64-shared-lib`) | SHA-256 of the release archive and of the shipped file |
 | `onnxruntime.dll`, `onnxruntime_providers_shared.dll`, `libonnxruntime.dylib`, license and notices | Microsoft's ONNX Runtime `v1.28.2` GitHub release | SHA-256 of the release archive and of the shipped file; on Windows also a valid embedded Microsoft Corporation signature |
-| `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` (Windows) | Visual C++ redistributable of the build's Visual Studio installation | Valid embedded Microsoft Corporation signature; version at least the newest linker of any bundled binary |
+| `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll`, and on x64 `vcruntime140_1.dll` (Windows) | Visual C++ redistributable of the build's Visual Studio installation | Valid embedded Microsoft Corporation signature; version at least the newest linker of any bundled binary |
 | `sherpa-onnx.node` | Compiled here from the tag's addon sources, node-addon-api 8.3.0, Node 24.21.0 headers and, on Windows, `node.lib` and the node-gyp 12.4.0 delay-load hook | SHA-256 of every input |
 
 Every pinned input and the SHA-256 of every shipped upstream binary are in [`lock.json`](lock.json).

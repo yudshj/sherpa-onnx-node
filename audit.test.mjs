@@ -78,6 +78,7 @@ test('accepts only the native machine type reported by dumpbin and reads the lin
   assert.throws(() => parseHeaders(headers('8664 machine (x64)'), 'arm64'), /Expected a native arm64 binary/);
   assert.throws(() => parseHeaders(headers('AA64 machine (ARM64)'), 'x64'), /Expected a native x64 binary/);
   assert.throws(() => parseHeaders(headers('8664 machine (x64) (ARM64X)'), 'x64'), /Expected a native x64 binary/);
+  assert.deepEqual(parseHeaders(headers('AA64 machine (ARM64) (ARM64X)'), 'arm64'), { machine: 'ARM64', linker: '14.44' });
   assert.throws(() => parseHeaders('dumpbin : fatal error LNK1106: invalid file', 'arm64'), /did not report a machine type/);
   assert.throws(() => parseHeaders('FILE HEADER VALUES\n AA64 machine (ARM64)', 'arm64'), /did not report a linker version/);
 });

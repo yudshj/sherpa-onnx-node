@@ -24,8 +24,9 @@ export function parseDependents(output) {
 export function parseHeaders(output, arch) {
   const machine = output.match(/^\s*([0-9A-F]+) machine \(([^)]+)\)(.*)$/imu);
   if (!machine) throw new Error('dumpbin did not report a machine type');
-  // ARM64X and ARM64EC images report an x64 machine followed by an ARM64 annotation; neither is a native image.
-  if (machine[1].toUpperCase() !== machines[arch] || /ARM64/iu.test(machine[3])) {
+  // ARM64X images (native ARM64 plus ARM64EC code) load in native ARM64 processes. An x64 machine followed by an
+  // ARM64EC or ARM64X annotation is not a native x64 image.
+  if (machine[1].toUpperCase() !== machines[arch] || (arch === 'x64' && /ARM64/iu.test(machine[3]))) {
     throw new Error(`Expected a native ${arch} binary; dumpbin reported ${machine[0].trim()}`);
   }
   const linker = output.match(/^\s*([0-9]+\.[0-9]+) linker version/imu);
