@@ -38,7 +38,8 @@
       "assets": {
         "nodeLib": {
           "url": "https://nodejs.org/dist/v24.21.0/win-x64/node.lib",
-          "sha256": "a0a84aa03917b578d286010b7521837e9ff1136ffb2e4a406c14316c33fd06f7"
+          "sha256": "a0a84aa03917b578d286010b7521837e9ff1136ffb2e4a406c14316c33fd06f7",
+          "file": "node.lib"
         },
         "gyp": {
           "url": "https://registry.npmjs.org/node-gyp/-/node-gyp-12.4.0.tgz",
@@ -91,7 +92,8 @@
       "assets": {
         "nodeLib": {
           "url": "https://nodejs.org/dist/v24.21.0/win-arm64/node.lib",
-          "sha256": "2c0c3215d59c09d7c136da4949696dae121a299e9bdfc64cd9130a58610af63d"
+          "sha256": "2c0c3215d59c09d7c136da4949696dae121a299e9bdfc64cd9130a58610af63d",
+          "file": "node.lib"
         },
         "gyp": {
           "url": "https://registry.npmjs.org/node-gyp/-/node-gyp-12.4.0.tgz",

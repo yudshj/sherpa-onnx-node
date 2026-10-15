@@ -38,11 +38,11 @@ export async function assetFile(key, asset) {
   return file;
 }
 
-/** Extract only the listed members of a pinned archive, or copy a pinned single file. */
+/** Extract only the listed members of a pinned archive into a directory, or copy a pinned single file into it under its file name. */
 export async function prepareAsset(key, asset, destination) {
   const file = await assetFile(key, asset);
-  if (!asset.root) { copyFileSync(file, destination); return; }
   mkdirSync(destination, { recursive: true });
+  if (!asset.root) { copyFileSync(file, join(destination, asset.file)); return; }
   run(systemTar(), ['-xf', file, '-C', destination, '--strip-components', '1', ...asset.members.map(member => `${asset.root}/${member}`)]);
 }
 
@@ -89,7 +89,7 @@ function compileWindows(work, compiled, sources) {
     '/DHOST_BINARY="node.exe"', `/I${join(work, 'source')}`, `/I${join(work, 'api')}`, `/I${join(work, 'headers', 'include', 'node')}`,
     ...sources, join(work, 'gyp', 'src', 'win_delay_load_hook.cc'), '/LD', '/Fesherpa-onnx.node',
     '/link', '/DEBUG:NONE', '/PDBALTPATH:sherpa-onnx.pdb', '/INCREMENTAL:NO', '/DELAYLOAD:node.exe',
-    join(work, 'nodeLib'), join(work, 'sherpa', 'lib', 'sherpa-onnx-c-api.lib'), 'delayimp.lib'], { cwd: compiled, env: vs.environment });
+    join(work, 'nodeLib', 'node.lib'), join(work, 'sherpa', 'lib', 'sherpa-onnx-c-api.lib'), 'delayimp.lib'], { cwd: compiled, env: vs.environment });
   const runtimeRoot = join(vs.environment.VCToolsRedistDir, vs.arch);
   const runtimeDirectory = readdirSync(runtimeRoot).find(entry => /^Microsoft\.VC\d+\.CRT$/u.test(entry));
   if (!runtimeDirectory) throw new Error(`No ${vs.arch} C++ runtime redistributable under ${runtimeRoot}`);
