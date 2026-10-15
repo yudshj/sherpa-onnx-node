@@ -2,7 +2,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import * as tar from 'tar';
 import { auditTarball, privateValues, scanBytes } from './audit.mjs';
 import { binaries, isWindows, javascript, lock, manifest, minimumMacOS, packageFiles, packageName, platforms, readme, runtimeLibraries, tarballName, targets, version } from './targets.mjs';
@@ -222,8 +222,10 @@ function published(name) {
  * them. Every tarball must match its audit report, and no version may already exist on the registry. A dry run performs
  * every check and runs `npm publish --dry-run`, which uploads nothing and needs no login.
  */
-async function publish(directory, dryRun) {
-  if (!directory) throw new Error('Usage: node release.mjs publish <directory with tarballs and audit reports>');
+async function publish(argument, dryRun) {
+  if (!argument) throw new Error('Usage: node release.mjs publish <directory with tarballs and audit reports>');
+  // npm reads a relative owner/name.tgz argument as a GitHub repository shorthand.
+  const directory = resolve(argument);
   const order = [...Object.keys(platforms), 'main'];
   const reports = Object.fromEntries(order.map(target => [target, JSON.parse(readFileSync(join(directory, `audit-${target}.json`), 'utf8'))]));
   for (const target of order) {
