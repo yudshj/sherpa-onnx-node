@@ -1,7 +1,7 @@
 {
   "name": "sherpa-win-arm64-release-tools",
   "private": true,
-  "version": "1.13.8-mt.1",
+  "version": "1.13.8-r.2",
   "type": "module",
   "scripts": {
     "build": "node release.mjs build",
@@ -10,5 +10,7 @@
     "negative-control": "node negative-control.mjs",
     "test": "node --test audit.test.mjs"
   },
-  "dependencies": { "tar": "7.5.22" }
+  "dependencies": {
+    "tar": "7.5.22"
+  }
 }

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import * as tar from 'tar';
-import { auditTarball, binaries, files, name, packageManifest, privateValues, repository, scanBytes, version, upstreamVersion, wrappers } from './audit.mjs';
+import { auditTarball, binaries, files, name, onnxruntimeVersion, packageManifest, privateValues, repository, runtimeLibraries, scanBytes, version, upstreamVersion, wrappers } from './audit.mjs';
 import { systemTar, toolchain } from './toolchain.mjs';
 
 const root = import.meta.dirname;
@@ -48,11 +48,20 @@ function mapSourceNames(directory, label) {
   }
 }
 
+/** Load the package, run native resampling, and require every eagerly loaded DLL to come from the package directory. */
 function smoke(directory, executable = process.execPath, electron = false) {
-  const script = `const assert=require('node:assert/strict'); const s=require(${JSON.stringify(join(directory, 'sherpa-onnx.js'))});
+  // ONNX Runtime loads onnxruntime_providers_shared.dll only for shared execution providers.
+  const expected = binaries.filter(file => file !== 'onnxruntime_providers_shared.dll').map(file => join(directory, file).toLowerCase());
+  const script = `const assert=require('node:assert/strict'); const path=require('node:path');
+    const s=require(${JSON.stringify(join(directory, 'sherpa-onnx.js'))});
     assert.equal(typeof s.OfflineRecognizer,'function'); assert.equal(typeof s.Vad,'function');
     const r=new s.LinearResampler(16000,8000); assert.equal(r.flush(new Float32Array(1600)).length,800);
-    console.log('Native smoke passed: '+process.arch+'; 1600 -> 800 samples');`;
+    const loaded=process.report.getReport().sharedObjects.map(p=>p.toLowerCase());
+    for (const file of ${JSON.stringify(expected)}) {
+      const name=path.basename(file), hit=loaded.find(p=>path.basename(p)===name);
+      assert.ok(hit && hit.endsWith(file), name+' loaded from '+hit);
+    }
+    console.log('Native smoke passed: '+process.arch+'; 1600 -> 800 samples; bundled DLLs loaded from the package');`;
   run(executable, ['-e', script], electron ? { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } } : {});
 }
 
@@ -77,22 +86,20 @@ async function build() {
   const work = mkdtempSync(join(output, 'build-'));
   const sensitive = privateValues([work, root]);
   try {
-    for (const key of Object.keys(lock.assets)) {
+    for (const [key, asset] of Object.entries(lock.assets)) {
       const download = await assetFile(key);
       const destination = join(work, key === 'nodeLib' ? 'node.lib' : key);
-      if (key === 'nodeLib' || key.startsWith('license')) copyFileSync(download, destination);
-      else {
-        mkdirSync(destination);
-        const selected = key === 'source' ? [`sherpa-onnx-${upstreamVersion}/LICENSE`, `sherpa-onnx-${upstreamVersion}/sherpa-onnx/c-api/c-api.h`,
-          `sherpa-onnx-${upstreamVersion}/harmony-os/SherpaOnnxHar/sherpa_onnx/src/main/cpp`] : [];
-        run(tarExe, ['-xf', download, '-C', destination, '--strip-components', '1', ...selected]);
-      }
+      if (key === 'nodeLib') { copyFileSync(download, destination); continue; }
+      mkdirSync(destination);
+      run(tarExe, ['-xf', download, '-C', destination, '--strip-components', '1', ...(asset.members ?? []).map(member => `${asset.root}/${member}`)]);
     }
-    if (JSON.parse(readFileSync(join(work, 'wrapper', 'package.json'), 'utf8')).version !== upstreamVersion) {
-      throw new Error('Upstream JavaScript API version mismatch');
-    }
+    const javascript = join(work, 'source', 'scripts', 'node-addon-api', 'lib');
+    if (readdirSync(javascript).sort().join('\n') !== [...wrappers].sort().join('\n')) throw new Error('Upstream JavaScript API files differ from the allowlist');
+    const runtimeRoot = join(vs.environment.VCToolsRedistDir, 'arm64');
+    const runtimeDirectory = readdirSync(runtimeRoot).find(entry => /^Microsoft\.VC\d+\.CRT$/u.test(entry));
+    if (!runtimeDirectory) throw new Error(`No ARM64 C++ runtime redistributable under ${runtimeRoot}`);
     for (const key of ['source', 'api', 'headers', 'gyp']) mapSourceNames(join(work, key), key);
-    // Upstream ships the ARM64 runtime DLLs but no Node binding; compile only the binding against them.
+    // Upstream releases ship sherpa-onnx-c-api.dll but no Windows ARM64 Node binding; compile only the binding.
     const compiled = join(work, 'compiled');
     mkdirSync(compiled);
     const bindingRoot = join(work, 'source', 'harmony-os', 'SherpaOnnxHar', 'sherpa_onnx', 'src', 'main', 'cpp');
@@ -108,14 +115,26 @@ async function build() {
     { cwd: compiled, env: vs.environment });
     const stage = join(work, 'package');
     mkdirSync(stage);
-    for (const file of wrappers) copyFileSync(join(work, 'wrapper', file), join(stage, file));
-    for (const file of binaries) copyFileSync(file.endsWith('.node') ? join(compiled, file)
-      : join(work, 'libraries', 'lib', file), join(stage, file));
+    for (const file of wrappers) copyFileSync(join(javascript, file), join(stage, file));
+    const binarySources = {
+      'sherpa-onnx.node': join(compiled, 'sherpa-onnx.node'),
+      'sherpa-onnx-c-api.dll': join(work, 'libraries', 'lib', 'sherpa-onnx-c-api.dll'),
+      'onnxruntime.dll': join(work, 'onnxruntime', 'lib', 'onnxruntime.dll'),
+      'onnxruntime_providers_shared.dll': join(work, 'onnxruntime', 'lib', 'onnxruntime_providers_shared.dll'),
+      ...Object.fromEntries(runtimeLibraries.map(file => [file, join(runtimeRoot, runtimeDirectory, file)])),
+    };
+    for (const file of binaries) copyFileSync(binarySources[file], join(stage, file));
     for (const [source, dest] of [['source/LICENSE', 'LICENSE'], ['gyp/LICENSE', 'LICENSE-node-gyp'],
-      ['api/LICENSE.md', 'LICENSE-node-addon-api'], ['licenseOnnx', 'LICENSE-onnxruntime'],
-      ['licenseOnnxThirdParty', 'ThirdPartyNotices-onnxruntime.txt']]) copyFileSync(join(work, source), join(stage, dest));
+      ['api/LICENSE.md', 'LICENSE-node-addon-api'], ['onnxruntime/LICENSE', 'LICENSE-onnxruntime'],
+      ['onnxruntime/ThirdPartyNotices.txt', 'ThirdPartyNotices-onnxruntime.txt']]) copyFileSync(join(work, source), join(stage, dest));
     writeFileSync(join(stage, 'package.json'), `${JSON.stringify(packageManifest(), null, 2)}\n`);
-    writeFileSync(join(stage, 'README.md'), `# ${name}\n\nWindows ARM64 build of the [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) Node API ${upstreamVersion}.\n\nThis independently published package includes the unchanged upstream JavaScript API, a Node-API v8 adapter with the Electron delay-load hook, and upstream CPU runtime DLLs. It requires Windows ARM64. The adapter and runtime DLLs statically link the MSVC runtime; no Visual C++ Redistributable is required. It has no installation scripts, downloads, credentials, models, or recordings.\n\nUse require('${name}') for the upstream API. The package is based on sherpa-onnx-node ${upstreamVersion}; the mt suffix identifies its static MSVC runtime build. Other architectures should use sherpa-onnx-node.\n\nBuild and release source: ${repository}\n\nUpstream licenses and ONNX Runtime third-party notices are included.\n`);
+    writeFileSync(join(stage, 'README.md'), `# ${name}\n\nWindows ARM64 build of the [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) ${upstreamVersion} Node API.\n\n`
+      + `- JavaScript API and \`sherpa-onnx-c-api.dll\`: unchanged from the sherpa-onnx v${upstreamVersion} source tag and GitHub release.\n`
+      + `- \`onnxruntime.dll\` and \`onnxruntime_providers_shared.dll\`: Microsoft's ONNX Runtime ${onnxruntimeVersion} release, Microsoft-signed.\n`
+      + `- \`${runtimeLibraries.join('\`, \`')}\`: Microsoft-signed Visual C++ runtime libraries deployed beside ONNX Runtime, so no Visual C++ Redistributable installation is required.\n`
+      + `- \`sherpa-onnx.node\`: Node-API v8 binding compiled from the upstream sources with the Electron delay-load hook.\n\n`
+      + `It requires Windows ARM64 and has no installation scripts, downloads, credentials, models, or recordings. Use require('${name}') for the upstream API; other architectures should use sherpa-onnx-node.\n\n`
+      + `Build and release source: ${repository}\n\nUpstream licenses and ONNX Runtime third-party notices are included.\n`);
     if (readdirSync(stage).sort().join('\n') !== [...files].sort().join('\n')) throw new Error('Unexpected staging contents');
     for (const file of files) scanBytes(readFileSync(join(stage, file)), sensitive);
     smoke(stage);

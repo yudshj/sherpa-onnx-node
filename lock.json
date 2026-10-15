@@ -1,14 +1,26 @@
 {
   "sherpaVersion": "1.13.8",
+  "onnxruntimeVersion": "1.28.2",
   "assets": {
     "source": {
       "url": "https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/refs/tags/v1.13.8",
-      "sha256": "b0374cc56dbc186d442ae73d5de743bb092470b640c4c50ce7b029044c0c4fa8"
+      "sha256": "b0374cc56dbc186d442ae73d5de743bb092470b640c4c50ce7b029044c0c4fa8",
+      "root": "sherpa-onnx-1.13.8",
+      "members": ["LICENSE", "sherpa-onnx/c-api/c-api.h", "harmony-os/SherpaOnnxHar/sherpa_onnx/src/main/cpp", "scripts/node-addon-api/lib"]
     },
     "libraries": {
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-arm64-shared-MT-Release-lib.tar.bz2",
       "sha256": "22cd2b2b5e35c1132abc74a91ee77f683645437382617af6a4bd5818b9c509f4",
-      "bytes": 7622849
+      "bytes": 7622849,
+      "root": "sherpa-onnx-v1.13.8-win-arm64-shared-MT-Release-lib",
+      "members": ["lib/sherpa-onnx-c-api.dll", "lib/sherpa-onnx-c-api.lib"]
+    },
+    "onnxruntime": {
+      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-arm64-1.28.2.zip",
+      "sha256": "a3ab2265e52d157ef1c4f4f82f66fc582ce12a780510aac240690ce194b58510",
+      "bytes": 79713523,
+      "root": "onnxruntime-win-arm64-1.28.2",
+      "members": ["LICENSE", "ThirdPartyNotices.txt", "lib/onnxruntime.dll", "lib/onnxruntime_providers_shared.dll"]
     },
     "api": {
       "url": "https://registry.npmjs.org/node-addon-api/-/node-addon-api-8.3.0.tgz",
@@ -25,18 +37,6 @@
     "gyp": {
       "url": "https://registry.npmjs.org/node-gyp/-/node-gyp-12.4.0.tgz",
       "sha256": "c5651a4fa92942a36cf30e0f043119d4889e26e25f30ae28b8cecc16e705bf29"
-    },
-    "wrapper": {
-      "url": "https://registry.npmjs.org/sherpa-onnx-node/-/sherpa-onnx-node-1.13.8.tgz",
-      "sha256": "db2a7b8b18d950b6e9ca5c1c919afec33fd3dd2bfef1aade0bea5a9fe7a1f0f1"
-    },
-    "licenseOnnx": {
-      "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/LICENSE",
-      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
-    },
-    "licenseOnnxThirdParty": {
-      "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/ThirdPartyNotices.txt",
-      "sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"
     }
   }
 }

@@ -27,18 +27,19 @@ function developerEnvironment(installation) {
   const output = execFileSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `""${vcvarsall}" arm64 >nul 2>&1 & set"`],
     { encoding: 'utf8', windowsHide: true, windowsVerbatimArguments: true });
   const environment = parseEnvironment(output);
-  if (!environment.VCToolsInstallDir || !environment.WindowsSdkDir) return undefined;
+  if (!environment.VCToolsInstallDir || !environment.VCToolsRedistDir || !environment.WindowsSdkDir) return undefined;
   const bin = join(environment.VCToolsInstallDir, 'bin', 'Hostarm64', 'arm64');
-  if (!['cl.exe', 'link.exe', 'dumpbin.exe'].every(tool => existsSync(join(bin, tool)))) return undefined;
-  return { environment, bin };
+  const signtool = join(environment.WindowsSdkVerBinPath ?? '', 'arm64', 'signtool.exe');
+  if (!['cl.exe', 'link.exe', 'dumpbin.exe'].every(tool => existsSync(join(bin, tool))) || !existsSync(signtool)) return undefined;
+  return { environment, bin, signtool };
 }
 
 let selected;
 
 /**
- * Select the newest Visual Studio installation whose `vcvarsall.bat arm64` configures native ARM64 MSVC and a
- * Windows SDK. VS_INSTALLATION pins one installation path.
- * @returns {{ path: string, version: string, environment: Record<string, string>, bin: string }} Selected toolchain.
+ * Select the newest Visual Studio installation whose `vcvarsall.bat arm64` configures native ARM64 MSVC, its C++
+ * runtime redistributable and a Windows SDK. VS_INSTALLATION pins one installation path.
+ * @returns {{ path: string, version: string, environment: Record<string, string>, bin: string, signtool: string }} Selected toolchain.
  */
 export function toolchain() {
   if (selected) return selected;

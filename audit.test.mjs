@@ -6,15 +6,37 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as tar from 'tar';
 import { auditContents, scanBytes, files, packageManifest } from './audit.mjs';
-import { parseDependents, parseMachine } from './import-audit.mjs';
+import { checkClosure, checkMicrosoftSignatures, checkRuntimeVersions, parseDependents, parseHeaders } from './import-audit.mjs';
 import { parseEnvironment } from './toolchain.mjs';
 
-test('rejects dynamic MSVC runtime imports, including delay imports and mixed case', () => {
-  for (const file of ['MSVCP140.dll', 'MSVCP140_1.dll', 'VCRUNTIME140.dll', 'concrt140.dll', 'VCCORLIB140.DLL']) {
-    assert.throws(() => parseDependents(`File Type: DLL\nImage has the following delay load dependencies:\n    ${file}\n    KERNEL32.dll`), /Dynamic MSVC runtime imports/);
+test('reads direct and delay-load imports from dumpbin', () => {
+  assert.deepEqual(parseDependents('File Type: DLL\n  Image has the following dependencies:\n    sherpa-onnx-c-api.dll\n    KERNEL32.dll\n'
+    + '  Image has the following delay load dependencies:\n    node.exe'), ['KERNEL32.dll', 'node.exe', 'sherpa-onnx-c-api.dll']);
+});
+
+test('requires every import to be bundled, the Node host, or part of Windows', () => {
+  const ort = { imports: ['KERNEL32.dll', 'MSVCP140.dll', 'VCRUNTIME140.dll', 'api-ms-win-crt-heap-l1-1-0.dll', 'dxgi.dll'] };
+  checkClosure({ 'onnxruntime.dll': ort, 'sherpa-onnx.node': { imports: ['node.exe', 'sherpa-onnx-c-api.dll'] } },
+    ['onnxruntime.dll', 'sherpa-onnx.node', 'sherpa-onnx-c-api.dll', 'msvcp140.dll', 'vcruntime140.dll']);
+  assert.throws(() => checkClosure({ 'onnxruntime.dll': ort }, ['onnxruntime.dll', 'vcruntime140.dll']),
+    /onnxruntime\.dll imports libraries that are neither bundled nor part of Windows: MSVCP140\.dll$/);
+  assert.throws(() => checkClosure({ 'sherpa-onnx.node': { imports: ['KERNEL32.dll', 'libnode.dll'] } }, ['sherpa-onnx.node']), /libnode\.dll/);
+});
+
+test('requires valid Microsoft Corporation signatures on Microsoft binaries', () => {
+  const microsoft = { status: 'Valid', subject: 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US' };
+  checkMicrosoftSignatures({ 'onnxruntime.dll': microsoft }, ['onnxruntime.dll']);
+  for (const signature of [{ status: 'NotSigned', subject: '' }, { status: 'HashMismatch', subject: microsoft.subject },
+    { status: 'Valid', subject: 'CN=Microsoft Corporation Impostor, O=Example' }, undefined]) {
+    assert.throws(() => checkMicrosoftSignatures({ 'onnxruntime.dll': signature }, ['onnxruntime.dll']), /Microsoft Corporation Authenticode/);
   }
-  assert.deepEqual(parseDependents('File Type: DLL\n    KERNEL32.dll\n    node.exe\n    sherpa-onnx-c-api.dll'),
-    ['KERNEL32.dll', 'node.exe', 'sherpa-onnx-c-api.dll']);
+});
+
+test('requires the bundled C++ runtime to cover every linker version', () => {
+  const dependencies = { 'onnxruntime.dll': { linker: '14.44' }, 'sherpa-onnx.node': { linker: '14.38' } };
+  checkRuntimeVersions(dependencies, { 'msvcp140.dll': '14.44.35211.0', 'vcruntime140.dll': '14.51.36247.0' });
+  assert.throws(() => checkRuntimeVersions(dependencies, { 'msvcp140.dll': '14.38.33135.0' }), /older than the newest bundled linker/);
+  assert.throws(() => checkRuntimeVersions(dependencies, { 'msvcp140.dll': undefined }), /older/);
 });
 
 test('rejects incomplete or unrecognized dumpbin output', () => {
@@ -38,12 +60,14 @@ test('rejects user paths, npm tokens and private-key headers', () => {
   }
 });
 
-test('accepts only the ARM64 machine type reported by dumpbin', () => {
-  const headers = machine => `File Type: DLL\n\nFILE HEADER VALUES\n            ${machine}\n               7 number of sections`;
-  assert.equal(parseMachine(headers('AA64 machine (ARM64)')), 'ARM64');
-  assert.throws(() => parseMachine(headers('8664 machine (x64)')), /Expected an ARM64 binary/);
-  assert.throws(() => parseMachine(headers('8664 machine (x64) (ARM64X)')), /Expected an ARM64 binary/);
-  assert.throws(() => parseMachine('dumpbin : fatal error LNK1106: invalid file'), /did not report a machine type/);
+test('accepts only the ARM64 machine type reported by dumpbin and reads the linker version', () => {
+  const headers = machine => `File Type: DLL\n\nFILE HEADER VALUES\n            ${machine}\n               7 number of sections\n`
+    + 'OPTIONAL HEADER VALUES\n             20B magic # (PE32+)\n           14.44 linker version';
+  assert.deepEqual(parseHeaders(headers('AA64 machine (ARM64)')), { machine: 'ARM64', linker: '14.44' });
+  assert.throws(() => parseHeaders(headers('8664 machine (x64)')), /Expected an ARM64 binary/);
+  assert.throws(() => parseHeaders(headers('8664 machine (x64) (ARM64X)')), /Expected an ARM64 binary/);
+  assert.throws(() => parseHeaders('dumpbin : fatal error LNK1106: invalid file'), /did not report a machine type/);
+  assert.throws(() => parseHeaders('FILE HEADER VALUES\n AA64 machine (ARM64)'), /did not report a linker version/);
 });
 
 test('rejects extra archive files before extraction', async () => {
@@ -89,5 +113,5 @@ test('reads the vcvarsall environment, including values that contain equals sign
 });
 
 test('declares the source repository required by provenance verification', () => {
-  assert.equal(packageManifest().repository.url, 'git+https://github.com/yudshj/sherpa-onnx-win-arm64.git');
+  assert.equal(packageManifest().repository.url, 'git+https://github.com/yudshj/sherpa-onnx-node.git');
 });

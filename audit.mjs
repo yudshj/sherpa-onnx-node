@@ -4,19 +4,25 @@ import { readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'no
 import { homedir, hostname, userInfo, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as tar from 'tar';
-import { inspectDependents } from './import-audit.mjs';
+import { inspectBinaries } from './import-audit.mjs';
 
 export const name = '@yudshj/sherpa-onnx-win-arm64';
 /** The release version is the tools package version; bump it before every publication. */
 export const version = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
-export const upstreamVersion = JSON.parse(readFileSync(new URL('./lock.json', import.meta.url), 'utf8')).sherpaVersion;
-export const repository = 'https://github.com/yudshj/sherpa-onnx-win-arm64';
-if (!version.startsWith(`${upstreamVersion}-mt.`)) throw new Error(`Version ${version} must be ${upstreamVersion}-mt.<n>`);
+const lock = JSON.parse(readFileSync(new URL('./lock.json', import.meta.url), 'utf8'));
+export const upstreamVersion = lock.sherpaVersion;
+export const onnxruntimeVersion = lock.onnxruntimeVersion;
+export const repository = 'https://github.com/yudshj/sherpa-onnx-node';
+if (!version.startsWith(`${upstreamVersion}-`)) throw new Error(`Version ${version} must be a prerelease of upstream ${upstreamVersion}`);
 export const wrappers = ['addon-static-import.js', 'addon.js', 'audio-tagg.js', 'keyword-spotter.js',
   'non-streaming-asr.js', 'non-streaming-speaker-diarization.js', 'non-streaming-speech-denoiser.js',
   'non-streaming-tts.js', 'online-speech-denoiser.js', 'punctuation.js', 'resampler.js', 'sherpa-onnx.js',
   'speaker-identification.js', 'spoken-language-identification.js', 'streaming-asr.js', 'types.js', 'vad.js'];
-export const binaries = ['sherpa-onnx.node', 'sherpa-onnx-c-api.dll', 'onnxruntime.dll', 'onnxruntime_providers_shared.dll'];
+/** Microsoft Visual C++ runtime libraries imported by Microsoft's ONNX Runtime, deployed beside it. */
+export const runtimeLibraries = ['msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll'];
+/** Binaries that must carry a valid Microsoft Corporation signature. */
+export const microsoftBinaries = ['onnxruntime.dll', 'onnxruntime_providers_shared.dll', ...runtimeLibraries];
+export const binaries = ['sherpa-onnx.node', 'sherpa-onnx-c-api.dll', ...microsoftBinaries];
 export const files = [...wrappers, ...binaries, 'package.json', 'README.md', 'LICENSE',
   'LICENSE-node-gyp', 'LICENSE-node-addon-api', 'LICENSE-onnxruntime', 'ThirdPartyNotices-onnxruntime.txt'];
 
@@ -84,19 +90,18 @@ export async function auditContents(path, sensitive = privateValues()) {
 }
 
 export function packageManifest() {
-  return { name, version, description: `Windows ARM64 build of the sherpa-onnx Node API, based on upstream ${upstreamVersion} with statically linked MSVC runtime.`,
+  return { name, version, description: `Windows ARM64 sherpa-onnx ${upstreamVersion} Node API with Microsoft ONNX Runtime ${onnxruntimeVersion}.`,
     main: 'sherpa-onnx.js', os: ['win32'], cpu: ['arm64'], engines: { node: '>=18' }, license: 'Apache-2.0',
     repository: { type: 'git', url: `git+${repository}.git` },
     files: files.filter(file => file !== 'package.json'), publishConfig: { access: 'public', registry: 'https://registry.npmjs.org/' } };
 }
 
-/** Full publication gate: metadata/privacy checks followed by dumpbin machine and import inspection. */
+/** Full publication gate: metadata and privacy checks, then machine, import closure and Microsoft signature inspection. */
 export async function auditTarball(path, sensitive = privateValues()) {
   const report = await auditContents(path, sensitive);
   const work = mkdtempSync(join(tmpdir(), 'sherpa-import-audit-'));
   try {
     await tar.x({ file: path, cwd: work, strict: true });
-    report.dependencies = Object.fromEntries(binaries.map(file => [file, inspectDependents(join(work, 'package', file))]));
-    return report;
+    return { ...report, ...inspectBinaries(join(work, 'package'), { binaries, microsoft: microsoftBinaries, runtime: runtimeLibraries }) };
   } finally { rmSync(work, { recursive: true, force: true, maxRetries: 10 }); }
 }
