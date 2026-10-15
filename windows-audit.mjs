@@ -56,7 +56,7 @@ export function checkMicrosoftSignatures(signatures, files) {
   for (const file of files) {
     const signature = signatures[file];
     if (signature?.status !== 'Valid' || !/^CN=Microsoft Corporation,/u.test(signature.subject)) {
-      throw new Error(`${file} must carry a valid Microsoft Corporation Authenticode signature`);
+      throw new Error(`${file} must carry a valid Microsoft Corporation Authenticode signature; signtool: ${signature?.status ?? 'not run'}, signer: ${signature?.subject || 'none'}${signature?.signtool ? `\n${signature.signtool}` : ''}`);
     }
   }
 }
@@ -91,8 +91,9 @@ function embeddedSignatures(paths) {
     { encoding: 'utf8', windowsHide: true, env: { ...process.env, AUDIT_FILES: JSON.stringify(paths) } }));
   for (const path of paths) {
     const file = path.split(/[\\/]/u).at(-1);
-    const verified = spawnSync(windowsToolchain().signtool, ['verify', '/pa', '/q', path], { windowsHide: true });
-    details[file] = { status: verified.status === 0 ? 'Valid' : details[file].subject ? 'Invalid' : 'NotSigned', ...details[file] };
+    const verified = spawnSync(windowsToolchain().signtool, ['verify', '/pa', path], { windowsHide: true, encoding: 'utf8' });
+    details[file] = { status: verified.status === 0 ? 'Valid' : details[file].subject ? 'Invalid' : 'NotSigned', ...details[file],
+      ...(verified.status === 0 ? {} : { signtool: `${verified.stdout}${verified.stderr}`.trim() }) };
   }
   return details;
 }
