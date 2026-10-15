@@ -40,3 +40,6 @@ jobs:
           merge-multiple: true
       - name: Publish the audited platform packages, then the main package, with provenance
         run: node release.mjs publish release
+      - name: Show npm's trusted publishing diagnostics
+        if: failure()
+        run: grep -h -i 'oidc' ~/.npm/_logs/*.log || echo 'npm logged no OIDC activity'
