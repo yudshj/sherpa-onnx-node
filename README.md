@@ -96,7 +96,7 @@ Each of the four packages must trust `publish.yml` with the `npm` environment:
 npm trust github <package> --file publish.yml --repository yudshj/sherpa-onnx-node --environment npm --allow-publish
 ```
 
-npm accepts a trust relationship only for an existing package. Publish the first version of a new package from the audited CI artifacts with the owner account, `node release.mjs publish <directory>` locally, then configure trust.
+npm accepts a trust relationship only for an existing package. Publish the first version of a new package from the audited CI artifacts with the owner account, `node release.mjs publish <directory>` locally, then configure trust. `--dry-run` performs every check and `npm publish --dry-run` without uploading or logging in. Registry checks use npm itself, so they follow npm's network configuration.
 
 ## Versions
 

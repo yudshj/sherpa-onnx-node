@@ -202,10 +202,27 @@ function publicationArguments() {
 }
 
 /**
- * Publish audited tarballs from one directory: every platform package first, then the main package that depends on
- * them. Every tarball must match its audit report, and no version may already exist on the registry.
+ * Ask the registry through npm whether a version exists. npm shares publication's connection settings and retries;
+ * Node's fetch gives each registry address 250 ms and fails on high-latency links.
+ * @param {string} name Package name.
+ * @returns {boolean} Whether name@version is already published.
  */
-async function publish(directory) {
+function published(name) {
+  const result = spawnSync(process.execPath, [npmCli, 'view', `${name}@${version}`, 'version', '--json', '--registry', registry],
+    { cwd: root, encoding: 'utf8' });
+  let output;
+  try { output = JSON.parse(result.stdout); } catch (error) { output = { error: { code: `unparsable output: ${error.message}` } }; }
+  if (result.status === 0 && output === version) return true;
+  if (result.status !== 0 && output?.error?.code === 'E404') return false;
+  throw new Error(`npm view ${name}@${version} failed: ${`${result.stdout}${result.stderr}`.trim()}`);
+}
+
+/**
+ * Publish audited tarballs from one directory: every platform package first, then the main package that depends on
+ * them. Every tarball must match its audit report, and no version may already exist on the registry. A dry run performs
+ * every check and runs `npm publish --dry-run`, which uploads nothing and needs no login.
+ */
+async function publish(directory, dryRun) {
   if (!directory) throw new Error('Usage: node release.mjs publish <directory with tarballs and audit reports>');
   const order = [...Object.keys(platforms), 'main'];
   const reports = Object.fromEntries(order.map(target => [target, JSON.parse(readFileSync(join(directory, `audit-${target}.json`), 'utf8'))]));
@@ -215,22 +232,21 @@ async function publish(directory) {
     if (report.name !== packageName(target) || report.version !== version) throw new Error(`${target} report is for ${report.name}@${report.version}`);
     if (createHash('sha512').update(bytes).digest('base64') !== report.sha512) throw new Error(`${target} tarball differs from its audit report`);
     if (target !== 'main' && !report.dependencies) throw new Error(`${target} report lacks native binary inspection`);
-    const status = await fetch(`${registry}${encodeURIComponent(packageName(target))}/${version}`);
-    if (status.status !== 404) throw new Error(`${packageName(target)}@${version} already exists or the registry returned ${status.status}`);
+    if (published(packageName(target))) throw new Error(`${packageName(target)}@${version} is already published`);
   }
-  const extra = publicationArguments();
+  const extra = dryRun ? ['--dry-run'] : publicationArguments();
   for (const target of order) {
     const result = spawnSync(process.execPath, [npmCli, 'publish', join(directory, tarballName(target)), '--tag', 'latest', '--access', 'public',
       '--ignore-scripts', '--registry', registry, ...extra], { cwd: root, stdio: 'inherit' });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(`npm publish ${packageName(target)} did not confirm success; inspect the registry before retrying`);
-    console.log(`Published ${packageName(target)}@${version}; audited sha512-${reports[target].sha512}`);
+    console.log(`${dryRun ? 'Dry run passed for' : 'Published'} ${packageName(target)}@${version}; audited sha512-${reports[target].sha512}`);
   }
 }
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) {
-  const [action, argument] = process.argv.slice(2);
+  const [action, argument, option] = process.argv.slice(2);
   if (action === 'build') await build(argument);
-  else if (action === 'publish') await publish(argument);
-  else throw new Error('Usage: node release.mjs build <target> | publish <directory>');
+  else if (action === 'publish' && (option === undefined || option === '--dry-run')) await publish(argument, option === '--dry-run');
+  else throw new Error('Usage: node release.mjs build <target> | publish <directory> [--dry-run]');
 }
