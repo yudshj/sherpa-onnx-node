@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          architecture: arm64
+      - name: Install release tool dependencies
+        run: npm ci --ignore-scripts
+      - name: Test audit rules
+        run: npm test
+      - name: Build and audit the package
+        run: npm run build
+      - name: Reject the dynamically linked 1.13.8 binaries
+        run: npm run negative-control
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: package-${{ github.sha }}
+          path: |
+            dist/*.tgz
+            dist/audit.json
+            dist/evidence/
+          if-no-files-found: error
+          retention-days: 14

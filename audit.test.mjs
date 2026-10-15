@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import * as tar from 'tar';
 import { auditContents, scanBytes, verifyPe, files, binaries, packageManifest } from './audit.mjs';
 import { parseDependents } from './import-audit.mjs';
+import { generatorFor } from './toolchain.mjs';
 
 test('rejects dynamic MSVC runtime imports, including delay imports and mixed case', () => {
   for (const file of ['MSVCP140.dll', 'MSVCP140_1.dll', 'VCRUNTIME140.dll', 'concrt140.dll', 'VCCORLIB140.DLL']) {
@@ -83,4 +84,14 @@ test('accepts portable metadata and rejects hard links and personal owners', asy
     writeFileSync(archive, gzipSync(raw));
     await assert.rejects(auditContents(archive, []), /Unexpected archive/);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('maps Visual Studio 2022 and 2026 to their CMake generators', () => {
+  assert.equal(generatorFor('17.14.37710.0'), 'Visual Studio 17 2022');
+  assert.equal(generatorFor('18.10.12224.181'), 'Visual Studio 18 2026');
+  assert.throws(() => generatorFor('16.11.35731.53'), /Unsupported Visual Studio/);
+});
+
+test('declares the source repository required by provenance verification', () => {
+  assert.equal(packageManifest().repository.url, 'git+https://github.com/yudshj/sherpa-onnx-win-arm64.git');
 });

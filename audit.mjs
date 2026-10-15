@@ -7,8 +7,11 @@ import * as tar from 'tar';
 import { inspectDependents } from './import-audit.mjs';
 
 export const name = '@yudshj/sherpa-onnx-win-arm64';
-export const version = '1.13.8-mt.1';
-export const upstreamVersion = '1.13.8';
+/** The release version is the tools package version; bump it before every publication. */
+export const version = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
+export const upstreamVersion = JSON.parse(readFileSync(new URL('./lock.json', import.meta.url), 'utf8')).sherpaVersion;
+export const repository = 'https://github.com/yudshj/sherpa-onnx-win-arm64';
+if (!version.startsWith(`${upstreamVersion}-mt.`)) throw new Error(`Version ${version} must be ${upstreamVersion}-mt.<n>`);
 export const wrappers = ['addon-static-import.js', 'addon.js', 'audio-tagg.js', 'keyword-spotter.js',
   'non-streaming-asr.js', 'non-streaming-speaker-diarization.js', 'non-streaming-speech-denoiser.js',
   'non-streaming-tts.js', 'online-speech-denoiser.js', 'punctuation.js', 'resampler.js', 'sherpa-onnx.js',
@@ -90,8 +93,9 @@ export async function auditContents(path, sensitive = privateValues()) {
 }
 
 export function packageManifest() {
-  return { name, version, description: 'Windows ARM64 build of the sherpa-onnx Node API, based on upstream 1.13.8 with statically linked MSVC runtime.',
+  return { name, version, description: `Windows ARM64 build of the sherpa-onnx Node API, based on upstream ${upstreamVersion} with statically linked MSVC runtime.`,
     main: 'sherpa-onnx.js', os: ['win32'], cpu: ['arm64'], engines: { node: '>=18' }, license: 'Apache-2.0',
+    repository: { type: 'git', url: `git+${repository}.git` },
     files: files.filter(file => file !== 'package.json'), publishConfig: { access: 'public', registry: 'https://registry.npmjs.org/' } };
 }
 

@@ -1,0 +1,50 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    # npm trusted publishing trusts this workflow file and environment; the environment requires approval.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          architecture: arm64
+      - name: Install release tool dependencies
+        run: npm ci --ignore-scripts
+      - name: Test audit rules
+        run: npm test
+      - name: Build and audit the package
+        run: npm run build
+      - name: Reject the dynamically linked 1.13.8 binaries
+        run: npm run negative-control
+      - name: Publish the audited tarball with provenance
+        run: node release.mjs publish
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: published-${{ github.sha }}
+          path: |
+            dist/*.tgz
+            dist/audit.json
+            dist/evidence/
+          if-no-files-found: warn
+          retention-days: 90

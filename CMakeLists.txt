@@ -3,7 +3,7 @@ cmake_policy(SET CMP0091 NEW)
 project(dsh_sherpa_arm64 LANGUAGES CXX)
 
 if(NOT MSVC OR NOT CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
-  message(FATAL_ERROR "Use Visual Studio 2022 with -A ARM64")
+  message(FATAL_ERROR "Use a Visual Studio generator with -A ARM64")
 endif()
 
 foreach(path_var SOURCE_ROOT API_ROOT HEADERS_ROOT GYP_ROOT NODE_LIB LIBRARY_ROOT)

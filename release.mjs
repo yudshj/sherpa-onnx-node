@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import * as tar from 'tar';
-import { auditTarball, binaries, files, name, packageManifest, privateValues, scanBytes, version, upstreamVersion, wrappers } from './audit.mjs';
+import { auditTarball, binaries, files, name, packageManifest, privateValues, repository, scanBytes, version, upstreamVersion, wrappers } from './audit.mjs';
+import { systemTar, visualStudio } from './toolchain.mjs';
 
 const root = import.meta.dirname;
 const lock = JSON.parse(readFileSync(join(root, 'lock.json'), 'utf8'));
@@ -68,7 +69,9 @@ async function check() {
 
 async function build() {
   if (process.platform !== 'win32' || process.arch !== 'arm64') throw new Error('Build on native Windows ARM64 Node.');
-  if (lock.sherpaVersion !== upstreamVersion) throw new Error('Version lock mismatch');
+  const vs = visualStudio();
+  const tarExe = systemTar();
+  console.log(`Visual Studio ${vs.version} at ${vs.path}; ${vs.generator}; bundled CMake ${vs.cmake}`);
   mkdirSync(output, { recursive: true });
   const work = mkdtempSync(join(output, 'build-'));
   const sensitive = privateValues([work, root]);
@@ -81,7 +84,7 @@ async function build() {
         mkdirSync(destination);
         const selected = key === 'source' ? [`sherpa-onnx-${upstreamVersion}/LICENSE`, `sherpa-onnx-${upstreamVersion}/sherpa-onnx/c-api/c-api.h`,
           `sherpa-onnx-${upstreamVersion}/harmony-os/SherpaOnnxHar/sherpa_onnx/src/main/cpp`] : [];
-        run('tar', ['-xf', download, '-C', destination, '--strip-components', '1', ...selected]);
+        run(tarExe, ['-xf', download, '-C', destination, '--strip-components', '1', ...selected]);
       }
     }
     if (JSON.parse(readFileSync(join(work, 'wrapper', 'package.json'), 'utf8')).version !== upstreamVersion) {
@@ -89,10 +92,10 @@ async function build() {
     }
     for (const key of ['source', 'api', 'headers', 'gyp']) mapSourceNames(join(work, key), key);
     const buildDir = join(work, 'compiled');
-    run('cmake', ['-S', root, '-B', buildDir, '-G', 'Visual Studio 17 2022', '-A', 'ARM64',
+    run(vs.cmake, ['-S', root, '-B', buildDir, '-G', vs.generator, '-A', 'ARM64', `-DCMAKE_GENERATOR_INSTANCE=${vs.path}`,
       ...Object.entries({ SOURCE_ROOT: 'source', API_ROOT: 'api', HEADERS_ROOT: 'headers', GYP_ROOT: 'gyp',
         NODE_LIB: 'node.lib', LIBRARY_ROOT: 'libraries' }).map(([key, path]) => `-D${key}=${join(work, path)}`)]);
-    run('cmake', ['--build', buildDir, '--config', 'Release', '--parallel', '4']);
+    run(vs.cmake, ['--build', buildDir, '--config', 'Release', '--parallel', '4']);
     const stage = join(work, 'package');
     mkdirSync(stage);
     for (const file of wrappers) copyFileSync(join(work, 'wrapper', file), join(stage, file));
@@ -102,7 +105,7 @@ async function build() {
       ['api/LICENSE.md', 'LICENSE-node-addon-api'], ['licenseOnnx', 'LICENSE-onnxruntime'],
       ['licenseOnnxThirdParty', 'ThirdPartyNotices-onnxruntime.txt']]) copyFileSync(join(work, source), join(stage, dest));
     writeFileSync(join(stage, 'package.json'), `${JSON.stringify(packageManifest(), null, 2)}\n`);
-    writeFileSync(join(stage, 'README.md'), `# ${name}\n\nWindows ARM64 build of the [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) Node API ${upstreamVersion}.\n\nThis independently published package includes the unchanged upstream JavaScript API, a Node-API v8 adapter with the Electron delay-load hook, and upstream CPU runtime DLLs. It requires Windows ARM64. The adapter and runtime DLLs statically link the MSVC runtime; no Visual C++ Redistributable is required. It has no installation scripts, downloads, credentials, models, or recordings.\n\nUse require('${name}') for the upstream API. The package is based on sherpa-onnx-node ${upstreamVersion}; the mt suffix identifies its static MSVC runtime build. Other architectures should use sherpa-onnx-node.\n\nUpstream licenses and ONNX Runtime third-party notices are included.\n`);
+    writeFileSync(join(stage, 'README.md'), `# ${name}\n\nWindows ARM64 build of the [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) Node API ${upstreamVersion}.\n\nThis independently published package includes the unchanged upstream JavaScript API, a Node-API v8 adapter with the Electron delay-load hook, and upstream CPU runtime DLLs. It requires Windows ARM64. The adapter and runtime DLLs statically link the MSVC runtime; no Visual C++ Redistributable is required. It has no installation scripts, downloads, credentials, models, or recordings.\n\nUse require('${name}') for the upstream API. The package is based on sherpa-onnx-node ${upstreamVersion}; the mt suffix identifies its static MSVC runtime build. Other architectures should use sherpa-onnx-node.\n\nBuild and release source: ${repository}\n\nUpstream licenses and ONNX Runtime third-party notices are included.\n`);
     if (readdirSync(stage).sort().join('\n') !== [...files].sort().join('\n')) throw new Error('Unexpected staging contents');
     for (const file of files) scanBytes(readFileSync(join(stage, file)), sensitive);
     smoke(stage);
@@ -113,13 +116,25 @@ async function build() {
   } finally { rmSync(work, { recursive: true, force: true, maxRetries: 10 }); }
 }
 
+/** GitHub Actions publishes through npm trusted publishing; local publication requires the owner account. */
+function publicationArguments() {
+  if (process.env.GITHUB_ACTIONS !== 'true') {
+    if (npm(['whoami', '--registry', registry]).trim() !== 'yudshj') throw new Error('Expected the yudshj npm account');
+    return [];
+  }
+  if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL) throw new Error('Trusted publishing requires the id-token: write permission');
+  const [major, minor, patch] = npm(['--version']).trim().split('.').map(Number);
+  if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error('Trusted publishing requires npm 11.5.1 or later');
+  return ['--provenance'];
+}
+
 async function publish() {
   const report = await check();
-  if (npm(['whoami', '--registry', registry]).trim() !== 'yudshj') throw new Error('Expected the yudshj npm account');
+  const extra = publicationArguments();
   const status = await fetch(`${registry}${encodeURIComponent(name)}/${version}`);
   if (status.status !== 404) throw new Error(`Publication requires an unpublished version; registry returned ${status.status}`);
   if (createHash('sha512').update(readFileSync(archive)).digest('base64') !== report.sha512) throw new Error('Tarball changed after audit');
-  const result = spawnSync(process.execPath, [npmCli, 'publish', archive, '--tag', 'latest', '--access', 'public', '--ignore-scripts', '--registry', registry], { cwd: root, stdio: 'inherit' });
+  const result = spawnSync(process.execPath, [npmCli, 'publish', archive, '--tag', 'latest', '--access', 'public', '--ignore-scripts', '--registry', registry, ...extra], { cwd: root, stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error('npm publish did not confirm success; inspect the registry before retrying');
   console.log(`Published ${name}@${version}; audited sha512-${report.sha512}`);
